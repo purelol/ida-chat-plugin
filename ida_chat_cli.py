@@ -16,13 +16,7 @@ import webbrowser
 from pathlib import Path
 from typing import Any, cast
 
-# Ensure local modules are importable
-sys.path.insert(0, str(Path(__file__).parent.resolve()))
-
-from ida_chat_bootstrap import bootstrap_runtime_dependencies
-
-bootstrap_runtime_dependencies()
-
+from ida_chat_cli_runtime_setup import ROOT_DIR as _RUNTIME_ROOT
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.syntax import Syntax
@@ -33,6 +27,9 @@ from ida_chat_history import MessageHistory
 from ida_chat_support import ScriptApprovalRequest
 
 from ida_domain import Database
+
+
+assert _RUNTIME_ROOT.exists()
 
 
 # ANSI colors for terminal output

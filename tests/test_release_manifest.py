@@ -14,6 +14,7 @@ def test_release_manifest_includes_runtime_files():
         "ida-plugin.json",
         "ida_chat_bootstrap.py",
         "ida_chat_core.py",
+        "ida_chat_cli_runtime_setup.py",
         "ida_chat_export.py",
         "ida_chat_history.py",
         "ida_chat_markdown.py",

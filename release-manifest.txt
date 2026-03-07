@@ -2,6 +2,7 @@ assets/
 ida-plugin.json
 ida_chat_bootstrap.py
 ida_chat_cli.py
+ida_chat_cli_runtime_setup.py
 ida_chat_core.py
 ida_chat_export.py
 ida_chat_history.py
