@@ -115,6 +115,53 @@ def test_export_transcript_creates_parent_directory_and_copies_pages(tmp_path, m
     assert (output_path.parent / "page-001.html").exists()
 
 
+def test_export_transcript_removes_stale_page_files(tmp_path, monkeypatch):
+    session = tmp_path / "session.jsonl"
+    session.write_text(
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}\n',
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "report" / "chat.html"
+    output_path.parent.mkdir(parents=True)
+    stale_page = output_path.parent / "page-999.html"
+    stale_page.write_text("<html>stale</html>", encoding="utf-8")
+
+    def fake_generate_html(_source_session: Path, target_dir: Path) -> None:
+        (target_dir / "index.html").write_text("<html>fresh</html>", encoding="utf-8")
+
+    monkeypatch.setattr("ida_chat_core.claude_code_transcripts.generate_html", fake_generate_html)
+
+    export_transcript(session, output_path)
+
+    assert output_path.exists()
+    assert not stale_page.exists()
+
+
+def test_export_transcript_to_dir_replaces_stale_generated_files(tmp_path, monkeypatch):
+    session = tmp_path / "session.jsonl"
+    session.write_text(
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}\n',
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "export"
+    output_dir.mkdir()
+    (output_dir / "index.html").write_text("<html>old</html>", encoding="utf-8")
+    stale_page = output_dir / "page-002.html"
+    stale_page.write_text("<html>stale</html>", encoding="utf-8")
+
+    def fake_generate_html(_source_session: Path, target_dir: Path) -> None:
+        (target_dir / "index.html").write_text("<html>fresh</html>", encoding="utf-8")
+        (target_dir / "page-001.html").write_text("<html>page</html>", encoding="utf-8")
+
+    monkeypatch.setattr("ida_chat_core.claude_code_transcripts.generate_html", fake_generate_html)
+
+    index_html = export_transcript_to_dir(session, output_dir)
+
+    assert index_html.read_text(encoding="utf-8") == "<html>fresh</html>"
+    assert (output_dir / "page-001.html").exists()
+    assert not stale_page.exists()
+
+
 def test_load_system_prompt_tolerates_missing_reference_docs(tmp_path, monkeypatch):
     prompt_file = tmp_path / "PROMPT.md"
     prompt_file.write_text("Base prompt", encoding="utf-8")

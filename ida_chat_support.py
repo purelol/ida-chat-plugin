@@ -16,6 +16,7 @@ from typing import Any, Literal, MutableMapping
 
 
 FailurePhase = Literal["test", "connect", "query", "disconnect"]
+RunOutcome = Literal["success", "error", "cancelled"]
 ScriptRisk = Literal["read-only", "mutating", "unknown"]
 ScriptDecision = Literal["approve", "skip", "cancel"]
 VerificationState = Literal["verified", "verifying", "unverified"]
@@ -238,6 +239,41 @@ def build_progress_timeline_steps(
         steps.append((len(steps) + 1, current_stage, "active"))
 
     return steps
+
+
+def describe_run_outcome(outcome: RunOutcome) -> tuple[str, str, bool]:
+    """Return status-chip text, tone, and whether the timeline should complete."""
+    if outcome == "error":
+        return "Needs attention", "error", False
+    if outcome == "cancelled":
+        return "Cancelled", "neutral", False
+    return "Ready", "ready", True
+
+
+def current_session_message_count(
+    sessions: list[dict[str, Any]],
+    current_session_id: str | None,
+) -> int | None:
+    """Return the persisted message count for the active session, if present."""
+    if not current_session_id:
+        return None
+
+    for session in sessions:
+        if str(session.get("id") or "") != current_session_id:
+            continue
+        value = session.get("message_count")
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except ValueError:
+                return None
+        return None
+
+    return None
 
 
 def classify_script_risk(code: str) -> ScriptRisk:

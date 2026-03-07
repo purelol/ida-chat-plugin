@@ -3,6 +3,8 @@ from pathlib import Path
 from ida_chat_support import (
     build_progress_timeline_steps,
     can_finalize_settings,
+    current_session_message_count,
+    describe_run_outcome,
     PromptContext,
     apply_auth_environment,
     auth_mode_has_credentials,
@@ -126,3 +128,19 @@ def test_build_progress_timeline_steps_numbers_steps_without_gaps():
         (2, "2 scripts", "complete"),
         (3, "Done", "complete"),
     ]
+
+
+def test_describe_run_outcome_preserves_non_success_states():
+    assert describe_run_outcome("success") == ("Ready", "ready", True)
+    assert describe_run_outcome("error") == ("Needs attention", "error", False)
+    assert describe_run_outcome("cancelled") == ("Cancelled", "neutral", False)
+
+
+def test_current_session_message_count_reads_active_session_summary():
+    sessions = [
+        {"id": "first", "message_count": 2},
+        {"id": "second", "message_count": "7"},
+    ]
+
+    assert current_session_message_count(sessions, "second") == 7
+    assert current_session_message_count(sessions, "missing") is None

@@ -226,6 +226,24 @@ def _prepare_transcript_source(
     return tmp_file
 
 
+def _clear_generated_transcript_files(
+    output_dir: Path,
+    *,
+    remove_index: bool = False,
+) -> None:
+    """Delete stale transcript HTML files before regenerating them."""
+    if not output_dir.exists():
+        return
+
+    if remove_index:
+        index_html = output_dir / "index.html"
+        if index_html.exists():
+            index_html.unlink()
+
+    for page_file in output_dir.glob("page-*.html"):
+        page_file.unlink()
+
+
 @contextmanager
 def _prepared_transcript_source(
     session_file: Path,
@@ -268,6 +286,7 @@ def export_transcript(
 
     output_dir = output_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
+    _clear_generated_transcript_files(output_dir)
 
     # Generate into a temp directory, then copy all HTML files
     with _prepared_transcript_source(session_file, redact_paths, binary_path) as source_session:
@@ -312,6 +331,7 @@ def export_transcript_to_dir(
         raise FileNotFoundError(f"Session file not found: {session_file}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    _clear_generated_transcript_files(output_dir, remove_index=True)
     with _prepared_transcript_source(session_file, redact_paths, binary_path) as source_session:
         claude_code_transcripts.generate_html(source_session, output_dir)
     logger.info(f"Exported transcript to {output_dir}")

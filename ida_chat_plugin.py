@@ -66,8 +66,11 @@ from ida_chat_support import (
     apply_auth_environment,
     build_progress_timeline_steps,
     can_finalize_settings,
+    current_session_message_count,
     DiagnosticReport,
+    describe_run_outcome,
     PromptContext,
+    RunOutcome,
     ScriptApprovalRequest,
     ScriptDecision,
     ScriptRisk,
@@ -3373,6 +3376,7 @@ class IDAChatForm(ida_kernwin.PluginForm):
     _message_count: int = 0
     _model_name: str = ""
     _connection_ready: bool = False
+    _run_outcome: RunOutcome = "success"
     _sidebar_expanded: bool = True
     _header_page: str = "Chat"
     _header_detail: str | None = None
@@ -3419,6 +3423,7 @@ class IDAChatForm(ida_kernwin.PluginForm):
         self._message_count = 0
         self._model_name = get_model_display_name()
         self._connection_ready = False
+        self._run_outcome = "success"
         self._sidebar_expanded = True
         self._header_page = "Chat"
         self._header_detail: str | None = None
@@ -4162,9 +4167,11 @@ class IDAChatForm(ida_kernwin.PluginForm):
         """Called when an error occurs."""
         short, details = self._format_error(error)
         if short != "Operation cancelled":
+            self._run_outcome = "error"
             self._last_had_error = True
             self._set_state_chip("Needs attention", "error")
         else:
+            self._run_outcome = "cancelled"
             self._set_state_chip("Cancelled", "neutral")
         self.chat_history.add_message(
             f"Error: {short}", is_user=False, msg_type=MessageType.ERROR
@@ -4179,9 +4186,17 @@ class IDAChatForm(ida_kernwin.PluginForm):
     def _on_session_list_updated(self, sessions: object):
         """Refresh sidebar contents after session mutations."""
         session_list = sessions if isinstance(sessions, list) else []
+        typed_session_list = cast(list[dict[str, object]], session_list)
         self.sessions_sidebar.set_sessions(
-            cast(list[dict[str, object]], session_list)
+            typed_session_list
         )
+        history = self._history_or_none()
+        message_count = current_session_message_count(
+            typed_session_list,
+            history.get_current_session_id() if history is not None else None,
+        )
+        if message_count is not None:
+            self._message_count = message_count
         self._sync_composer_state()
         self._update_status_bar()
 
@@ -4255,12 +4270,13 @@ class IDAChatForm(ida_kernwin.PluginForm):
     def _on_finished(self):
         """Called when agent finishes processing."""
         self._is_processing = False
-        self._message_count += 1
-        self._set_state_chip("Ready", "ready")
+        status_text, tone, mark_complete = describe_run_outcome(self._run_outcome)
+        self._set_state_chip(status_text, tone)
         self._sync_composer_state()
         self.input_widget.setFocus()
         self._update_status_bar()
-        self.progress_timeline.complete()
+        if mark_complete:
+            self.progress_timeline.complete()
         if self._current_message:
             self._current_message.set_complete()
             self._current_message = None
@@ -4583,6 +4599,7 @@ class IDAChatForm(ida_kernwin.PluginForm):
         self.progress_timeline.reset()
         self._script_count = 0
         self._last_had_error = False
+        self._run_outcome = "success"
 
         # Add user message to chat
         self.chat_history.add_message(text, is_user=True)
