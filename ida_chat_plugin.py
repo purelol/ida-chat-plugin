@@ -42,7 +42,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTextBrowser,
 )
-from PySide6.QtCore import Qt, Signal, QThread, QObject, QTimer
+from PySide6.QtCore import Qt, Signal, QThread, QObject, QTimer, QSize
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QKeyEvent, QPalette, QPixmap
 
 from ida_chat_core import (
@@ -501,7 +501,7 @@ def plain_text_style(colors: dict[str, object]) -> str:
 
 
 def dialog_style(colors: dict[str, object]) -> str:
-    """Shared shadcn-inspired dialog styling with no shadow treatment."""
+    """Shared shadcn-inspired dialog styling with a flat surface treatment."""
     return f"""
         QDialog, QMessageBox, QFileDialog, QInputDialog {{
             background-color: {colors["surface"]};
@@ -567,7 +567,7 @@ def preformatted_html(text: str) -> str:
     import html
 
     return (
-        "<pre style='margin: 0; white-space: pre-wrap; word-wrap: break-word;'>"
+        "<pre style='margin: 0; white-space: pre-wrap; word-break: normal;'>"
         f"{html.escape(text)}"
         "</pre>"
     )
@@ -782,23 +782,25 @@ class CollapsibleSection(QFrame):
         layout.addWidget(self.header)
 
         # Content area
-        self.content_label = QLabel()
-        self.content_label.setTextFormat(Qt.TextFormat.RichText)
-        self.content_label.setWordWrap(True)
-        self.content_label.setTextInteractionFlags(TEXT_SELECTABLE_FLAGS)
-        self.content_label.setStyleSheet(f"""
-            QLabel {{
+        self.content_frame = QFrame()
+        self.content_frame.setStyleSheet(f"""
+            QFrame {{
                 background-color: {colors["code_bg"]};
-                color: {colors["code_text"]};
-                padding: 8px 10px;
-                border: none;
-                border-radius: {colors["radius_md"]}px;
-                font-family: "{colors["font_mono"]}";
-                font-size: 11px;
+                border: 1px solid {colors["code_border"]};
+                border-radius: {colors["radius_lg"]}px;
             }}
         """)
+        content_layout = QVBoxLayout(self.content_frame)
+        content_layout.setContentsMargins(12, 12, 12, 12)
+        content_layout.setSpacing(0)
+
+        self.content_label = AutoSizingTextBrowser()
+        self.content_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         self._update_content()
-        layout.addWidget(self.content_label)
+        content_layout.addWidget(self.content_label)
+        layout.addWidget(self.content_frame)
 
     def _update_header_text(self):
         arrow = "▶" if self._collapsed else "▼"
@@ -808,15 +810,22 @@ class CollapsibleSection(QFrame):
     def _update_content(self):
         import html
 
-        _pre = "white-space: pre-wrap; word-break: break-all; margin: 0;"
+        _pre = (
+            "white-space: pre-wrap; word-break: normal; margin: 0; "
+            f"font-family: '{get_ida_colors()['font_mono']}'; font-size: 11px; line-height: 1.6;"
+        )
         if self._collapsed:
             lines = self._content.strip().split("\n")
             preview = "\n".join(lines[:3])
             if len(lines) > 3:
                 preview += f"\n... ({len(lines) - 3} more lines)"
-            self.content_label.setText(f'<pre style="{_pre}">{html.escape(preview)}</pre>')
+            self.content_label.set_html_fragment(
+                f'<pre style="{_pre}">{html.escape(preview)}</pre>'
+            )
         else:
-            self.content_label.setText(f'<pre style="{_pre}">{html.escape(self._content)}</pre>')
+            self.content_label.set_html_fragment(
+                f'<pre style="{_pre}">{html.escape(self._content)}</pre>'
+            )
 
     def _toggle(self):
         self._collapsed = not self._collapsed
@@ -848,21 +857,30 @@ class AutoSizingTextBrowser(QTextBrowser):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._max_content_width: int | None = None
+        self._preferred_width = 0
+        self._preferred_height = 0
         self.setReadOnly(True)
         self.setOpenExternalLinks(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setTextInteractionFlags(TEXT_SELECTABLE_LINK_FLAGS)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self.document().setDocumentMargin(0)
         self.setStyleSheet(
             "QTextBrowser { background: transparent; border: none; padding: 0; }"
         )
 
+    def set_max_content_width(self, width: int | None) -> None:
+        self._max_content_width = width
+        self._measure_preferred_width()
+        self._sync_height()
+
     def set_html_fragment(self, html_text: str) -> None:
         """Replace the current rich text content and recompute height."""
         self.setHtml(html_text)
+        self._measure_preferred_width()
         self._sync_height()
 
     def _handle_resize_event(self, event):
@@ -879,13 +897,39 @@ class AutoSizingTextBrowser(QTextBrowser):
 
     def _sync_height(self) -> None:
         viewport_width = max(self.viewport().width(), 0)
-        if viewport_width:
-            self.document().setTextWidth(viewport_width)
+        target_width = viewport_width or self._preferred_width
+        if self._max_content_width is not None and self._max_content_width > 0:
+            target_width = (
+                min(target_width, self._max_content_width)
+                if target_width
+                else self._max_content_width
+            )
+        if target_width > 0:
+            self.document().setTextWidth(target_width)
         self.document().adjustSize()
         height = int(self.document().size().height()) + 6
         if height > 0:
+            self._preferred_height = height
             self.setMinimumHeight(height)
             self.setMaximumHeight(height)
+        self.updateGeometry()
+
+    def _measure_preferred_width(self) -> None:
+        self.document().setTextWidth(-1)
+        self.document().adjustSize()
+        ideal_width = int(self.document().idealWidth()) + 4
+        if self._max_content_width is not None and self._max_content_width > 0:
+            ideal_width = min(ideal_width, self._max_content_width)
+        self._preferred_width = max(ideal_width, 72)
+
+    def sizeHint(self):
+        hint = super().sizeHint()
+        width = self._preferred_width or hint.width()
+        height = self._preferred_height or hint.height()
+        return QSize(width, height)
+
+    def minimumSizeHint(self):
+        return self.sizeHint()
 
 
 class MarkdownBubble(QFrame):
@@ -899,19 +943,37 @@ class MarkdownBubble(QFrame):
         border: str,
         text_color: str,
         max_width: int | None = None,
+        fill_width: bool = False,
         parent=None,
     ):
         super().__init__(parent)
         self._raw_text = text
         self._browser = AutoSizingTextBrowser(self)
         self._text_color = text_color
+        self._max_width = max_width
+        self._fill_width = fill_width
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(0)
         layout.addWidget(self._browser)
         if max_width is not None:
             self.setMaximumWidth(max_width)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+            self._browser.set_max_content_width(max(max_width - 28, 120))
+        if fill_width:
+            self._browser.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            )
+            self.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+            )
+        else:
+            self._browser.setSizePolicy(
+                QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed
+            )
+            self.setSizePolicy(
+                QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum
+            )
         self.setStyleSheet(
             f"""
             QFrame {{
@@ -940,6 +1002,23 @@ class MarkdownBubble(QFrame):
             f"{html_text}</div>"
         )
         self._browser.set_html_fragment(wrapped)
+
+    def sizeHint(self) -> QSize:
+        browser_hint = self._browser.sizeHint()
+        width = browser_hint.width() + 28
+        height = browser_hint.height() + 24
+        if self._fill_width:
+            floor = 520 if self._max_width is None else min(520, self._max_width)
+            width = max(width, floor)
+        if self._max_width is not None:
+            width = min(width, self._max_width)
+        return QSize(max(width, 96), max(height, 44))
+
+    def minimumSizeHint(self) -> QSize:
+        if not self._fill_width:
+            return self.sizeHint()
+        browser_hint = self._browser.sizeHint()
+        return QSize(240, max(browser_hint.height() + 24, 44))
 
 
 class MessageType:
@@ -1341,11 +1420,12 @@ class CodeBlock(QFrame):
             (colors["code_bg"], colors["accent"], colors["code_text"]),
         )
 
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             QFrame {{
                 background-color: {background};
-                border: none;
-                border-radius: {colors["radius_md"]}px;
+                border: 1px solid {colors["code_border"]};
+                border-radius: {colors["radius_lg"]}px;
             }}
             QLabel {{
                 background-color: transparent;
@@ -1353,23 +1433,48 @@ class CodeBlock(QFrame):
         """)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        header = QFrame()
+        header.setStyleSheet(f"""
+            QFrame {{
+                background-color: {colors["code_bg_alt"]};
+                border: none;
+                border-bottom: 1px solid {colors["code_border"]};
+                border-top-left-radius: {colors["radius_lg"]}px;
+                border-top-right-radius: {colors["radius_lg"]}px;
+            }}
+        """)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(14, 10, 14, 10)
+        header_layout.setSpacing(8)
 
         heading = QLabel(self.title.upper())
         heading.setStyleSheet(
             f"QLabel {{ color: {accent}; font-size: 10px; letter-spacing: 0.12em; font-weight: 600; }}"
         )
-        layout.addWidget(heading)
+        header_layout.addWidget(heading)
+        header_layout.addStretch(1)
+        layout.addWidget(header)
 
-        body = QLabel(preformatted_html(self.body))
-        body.setTextFormat(Qt.TextFormat.RichText)
-        body.setWordWrap(True)
-        body.setTextInteractionFlags(TEXT_SELECTABLE_FLAGS)
-        body.setStyleSheet(
-            f'QLabel {{ color: {text_color}; font-family: "{colors["font_mono"]}"; font-size: 11px; line-height: 1.45; }}'
+        body_wrap = QFrame()
+        body_wrap.setStyleSheet("QFrame { border: none; background: transparent; }")
+        body_layout = QVBoxLayout(body_wrap)
+        body_layout.setContentsMargins(14, 14, 14, 14)
+        body_layout.setSpacing(0)
+
+        body = AutoSizingTextBrowser()
+        body.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        body.set_html_fragment(
+            (
+                f"<pre style=\"margin: 0; white-space: pre-wrap; word-break: normal; "
+                f"font-family: '{colors['font_mono']}'; font-size: 11px; line-height: 1.6; "
+                f"color: {text_color};\">{html.escape(self.body)}</pre>"
+            )
         )
-        layout.addWidget(body)
+        body_layout.addWidget(body)
+        layout.addWidget(body_wrap)
 
 
 class ScriptReviewCard(QFrame):
@@ -1678,6 +1783,7 @@ class ChatMessage(QFrame):
                 border=_coerce_str(colors["user_bubble"]),
                 text_color=_coerce_str(colors["user_bubble_text"]),
                 max_width=520,
+                fill_width=False,
             )
             self.message_widget.setSizePolicy(
                 QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum
@@ -1685,16 +1791,6 @@ class ChatMessage(QFrame):
             layout.addStretch()
             layout.addWidget(self.message_widget)
         else:
-            # Status indicator for assistant messages (small dot)
-            status_indicator = QLabel("●")
-            self._status_indicator = status_indicator
-            status_indicator.setFixedWidth(16)
-            status_indicator.setAlignment(
-                Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignTop
-            )
-            self._update_indicator_style()
-            layout.addWidget(status_indicator)
-
             # Apply type-specific styling
             if self._msg_type == MessageType.TOOL_USE:
                 self.message_widget = QLabel()
@@ -1702,14 +1798,17 @@ class ChatMessage(QFrame):
                 self.message_widget.setWordWrap(True)
                 self.message_widget.setTextInteractionFlags(TEXT_SELECTABLE_FLAGS)
                 self.message_widget.setText(
-                    f"<b style='color: {colors['success_text']};'>{text}</b>"
+                    html.escape(text)
                 )
                 self.message_widget.setStyleSheet(f"""
                     QLabel {{
-                        background-color: transparent;
-                        color: {colors["success_text"]};
-                        padding: 2px 0;
+                        background-color: {colors["info_soft"]};
+                        color: {colors["info_text"]};
+                        border: 1px solid {colors["info_border"]};
+                        border-radius: {colors["radius_lg"]}px;
+                        padding: 10px 12px;
                         font-size: 12px;
+                        font-weight: 500;
                     }}
                 """)
             elif self._msg_type == MessageType.SCRIPT:
@@ -1722,6 +1821,8 @@ class ChatMessage(QFrame):
                     background=_coerce_str(colors["danger_soft"]),
                     border=_coerce_str(colors["danger_border"]),
                     text_color=_coerce_str(colors["danger_text"]),
+                    max_width=920,
+                    fill_width=True,
                 )
             else:
                 self.message_widget = MarkdownBubble(
@@ -1729,12 +1830,12 @@ class ChatMessage(QFrame):
                     background=_coerce_str(colors["surface"]),
                     border=_coerce_str(colors["border"]),
                     text_color=_coerce_str(colors["text"]),
+                    max_width=920,
+                    fill_width=True,
                 )
 
-            self.message_widget.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
-            )
             layout.addWidget(self.message_widget)
+            layout.addStretch(1)
 
             # Start blinking if processing
             if self._is_processing:
@@ -1831,7 +1932,7 @@ class ChatHistoryWidget(QScrollArea):
         self._layout = QVBoxLayout(self.container)
         self._layout.setSpacing(8)
         self._layout.setContentsMargins(12, 12, 12, 12)
-        self._layout.addStretch(1)  # Stretch at top pushes messages to bottom
+        self._layout.addStretch(1)
 
         self.setWidget(self.container)
 
@@ -1844,7 +1945,7 @@ class ChatHistoryWidget(QScrollArea):
     ) -> ChatMessage:
         """Add a message to the chat history."""
         message = ChatMessage(text, is_user, is_processing, msg_type)
-        self._layout.addWidget(message)
+        self._layout.insertWidget(max(self._layout.count() - 1, 0), message)
 
         # Track processing message
         if is_processing:
@@ -1873,25 +1974,23 @@ class ChatHistoryWidget(QScrollArea):
     ) -> CollapsibleSection:
         """Add a collapsible section to the chat history."""
         section = CollapsibleSection(title, content, collapsed)
-        self._layout.addWidget(section)
+        self._layout.insertWidget(max(self._layout.count() - 1, 0), section)
         self.scroll_to_bottom()
         return section
 
     def add_script_review(self, request: ScriptApprovalRequest) -> ScriptReviewCard:
         """Add a script review card to the chat history."""
         card = ScriptReviewCard(request)
-        self._layout.addWidget(card)
+        self._layout.insertWidget(max(self._layout.count() - 1, 0), card)
         self.scroll_to_bottom()
         return card
 
     def clear_history(self):
         """Clear all messages from the chat history."""
         self._current_processing_message = None
-        # Remove all widgets except the stretch at index 0
+        # Remove all widgets except the stretch at the end.
         while self._layout.count() > 1:
-            item = self._layout.takeAt(
-                1
-            )  # Always take from index 1, leaving stretch at 0
+            item = self._layout.takeAt(0)
             if item is None:
                 continue
             widget = item.widget()

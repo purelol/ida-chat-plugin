@@ -714,7 +714,6 @@ def render_transcript_html(
       border-radius: 18px;
       overflow: hidden;
       background: var(--code-bg);
-      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
     }}
 
     .md-code-header {{

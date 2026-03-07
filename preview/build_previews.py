@@ -8,15 +8,14 @@ import sys
 import tempfile
 import webbrowser
 from pathlib import Path
+from ida_chat_export import render_transcript_html
+from ida_chat_markdown import build_web_syntax_css, render_web_markdown
+from ida_chat_theme import build_ui_colors
 
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-from ida_chat_export import render_transcript_html
-from ida_chat_markdown import build_web_syntax_css, render_web_markdown
-from ida_chat_theme import build_ui_colors
 
 
 OUTPUT_DIR = Path(__file__).resolve().parent
@@ -157,7 +156,6 @@ def _shared_preview_styles() -> str:
       font-weight: 600;
       letter-spacing: -0.01em;
       white-space: nowrap;
-      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-elevated) 48%, transparent);
     }}
 
     .theme-toggle,
@@ -186,7 +184,6 @@ def _shared_preview_styles() -> str:
       background: color-mix(in srgb, var(--surface) 96%, transparent);
       overflow: hidden;
       backdrop-filter: blur(18px);
-      box-shadow: 0 20px 80px rgba(0, 0, 0, 0.06);
     }}
 
     .window-chrome {{
@@ -420,25 +417,9 @@ def _shared_preview_styles() -> str:
 
     .assistant-grid {{
       display: grid;
-      grid-template-columns: 18px minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 12px;
       align-items: start;
-    }}
-
-    .assistant-dot {{
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      margin-top: 16px;
-      background: var(--success-text);
-    }}
-
-    .assistant-dot.info {{
-      background: var(--info-text);
-    }}
-
-    .assistant-dot.warning {{
-      background: var(--warning-text);
     }}
 
     .message-prose {{
@@ -698,7 +679,6 @@ def _shared_preview_styles() -> str:
       border-radius: 18px;
       overflow: hidden;
       background: var(--code-bg);
-      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
     }}
 
     .md-code-header {{
@@ -999,7 +979,6 @@ def _main_window_markup() -> str:
             </article>
             <article class="chat-message">
               <div class="assistant-grid">
-                <span class="assistant-dot"></span>
                 <div class="message-shell">
                   <div class="message-label">Assistant</div>
                   <div class="message-prose">{assistant_message}</div>
@@ -1008,7 +987,6 @@ def _main_window_markup() -> str:
             </article>
             <article class="chat-message">
               <div class="assistant-grid">
-                <span class="assistant-dot info"></span>
                 <div class="tool-banner">
                   <strong>IDAPythonExec</strong>
                   <span>Prepared a small inspection helper for the currently selected function.</span>
@@ -1263,7 +1241,8 @@ def _write_export_preview(output_path: Path) -> None:
         session_file = tmp_dir_path / "preview-session.jsonl"
         metadata_file = tmp_dir_path / "preview-session.meta.json"
         session_file.write_text(
-            "\n".join(json.dumps(entry, ensure_ascii=False) for entry in sample_entries) + "\n",
+            "\n".join(json.dumps(entry, ensure_ascii=False) for entry in sample_entries)
+            + "\n",
             encoding="utf-8",
         )
         metadata_file.write_text(

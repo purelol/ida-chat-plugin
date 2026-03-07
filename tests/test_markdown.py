@@ -42,7 +42,7 @@ def test_render_qt_markdown_styles_code_blocks_and_links():
     assert "text-decoration: none" in html
     assert "background-color" in html
     assert "font-family" in html
-    assert "Code</td>" in html
+    assert "Code · python" in html
     assert colors["info_text"] in html
 
 

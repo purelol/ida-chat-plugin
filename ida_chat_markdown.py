@@ -394,27 +394,16 @@ def _render_qt_code_block(language: str, code: str, colors: dict[str, Any]) -> s
         dark=bool(colors.get("is_dark", False)),
     )
     label = language or "code"
-    header = (
-        f'<tr>'
-        f'<td style="padding: 10px 14px; background-color: {colors["code_bg_alt"]}; '
-        f'color: {colors["text_subtle"]}; font-size: 10px; font-weight: 700;">Code</td>'
-        f'<td align="right" style="padding: 10px 14px; background-color: {colors["code_bg_alt"]}; '
-        f'color: {colors["text_subtle"]}; font-size: 10px; font-weight: 700;">{label}</td>'
-        f'</tr>'
-    )
-    if not language:
-        header = (
-            f'<tr><td colspan="2" style="padding: 10px 14px; background-color: {colors["code_bg_alt"]}; '
-            f'color: {colors["text_subtle"]}; font-size: 10px; font-weight: 700;">Code</td></tr>'
-        )
+    header_label = f"Code · {html.escape(label)}" if language else "Code"
     return (
-        f'<table cellspacing="0" cellpadding="0" width="100%" '
-        f'style="margin: 12px 0; border: 1px solid {colors["code_border"]}; '
+        f'<div style="margin: 12px 0; border: 1px solid {colors["code_border"]}; '
         f'border-radius: {colors["radius_lg"]}px; background-color: {colors["code_bg"]};">'
-        f"{header}"
-        f'<tr><td colspan="2" style="padding: 0;">'
+        f'<div style="padding: 10px 14px; background-color: {colors["code_bg_alt"]}; '
+        f'border-bottom: 1px solid {colors["code_border"]}; color: {colors["text_subtle"]}; '
+        f'font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;">'
+        f"{header_label}</div>"
         f'<pre style="margin: 0; padding: 14px 16px; background-color: {colors["code_bg"]}; '
         f'color: {colors["code_text"]}; font-family: \'{font_mono}\'; '
-        f'font-size: 11px; line-height: 1.65; white-space: pre-wrap;">{highlighted}</pre>'
-        f"</td></tr></table>"
+        f'font-size: 11px; line-height: 1.65; white-space: pre-wrap; word-break: normal;">{highlighted}</pre>'
+        f"</div>"
     )
