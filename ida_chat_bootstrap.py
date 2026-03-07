@@ -90,8 +90,10 @@ def bootstrap_runtime_dependencies() -> None:
 
     missing_list = ", ".join(_normalize_requirement_name(spec) for spec in missing)
     env_hint = (
-        f"Create the project environment first with `uv sync`, or run "
-        f"`python3 -m venv {VENV_DIR.name} && {VENV_DIR.name}/bin/pip install -r requirements.txt`."
+        f"Create the project environment with the same Python major.minor version as IDA "
+        f"using `uv sync --python {sys.version_info.major}.{sys.version_info.minor} --extra dev`, "
+        f"or run `python{sys.version_info.major}.{sys.version_info.minor} -m venv {VENV_DIR.name} && "
+        f"{VENV_DIR.name}/bin/pip install -r requirements.txt`."
     )
     raise RuntimeError(
         "IDA Chat runtime dependencies are missing: "

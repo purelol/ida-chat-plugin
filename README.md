@@ -65,7 +65,7 @@ See the plugin in both light and dark mode before you even install it.
 - **Dockable panel** — open from **View > IDA Chat** inside IDA
 - **AI binary analysis** — ask anything about your binary; Claude responds with code and explanations
 - **Automatic script execution** — Claude writes and runs IDA Python scripts against your open binary without any copy-paste
-- **Script approval gate** — optional per-request approval before any script runs, with risk classification (read-only / mutating)
+- **Script approval gate** — optional per-request approval before any script runs, with risk classification
 - **Context-aware prompts** — cursor position, current function name, and selected text are automatically attached to every message
 - **Multi-session workspace** — maintain multiple named conversations per binary; switch, rename, delete, and export from the sidebar
 - **Persistent history** — sessions saved to `~/.ida-chat/` scoped per binary, fully resumable across IDA restarts
@@ -84,6 +84,7 @@ See the plugin in both light and dark mode before you even install it.
 | IDA Pro     | 9.0 or later                                   |
 | hcli        | Latest                                         |
 | Claude      | API key, OAuth, or system auth via Claude Code |
+| Python      | For source checkouts, use the same major.minor version as IDA's embedded Python |
 
 ---
 
@@ -124,29 +125,45 @@ Use this only if you are developing the plugin or testing local changes.
    ~/.idapro/plugins/ida-chat
    ```
 
-2. Create the local environment with the same Python version used by IDA 9.3:
+2. Find the Python version used by your IDA build.
 
-   ```bash
-   uv sync --python 3.11 --extra dev
+   Open IDA and check the startup log, or run this in the IDA Python console:
+
+   ```python
+   import sys
+   print(f"{sys.version_info.major}.{sys.version_info.minor}")
    ```
 
-3. If you do not use `uv`, create the environment manually:
+   Use that `X.Y` value in the next steps.
+
+3. Create the local environment with the same Python major.minor version:
 
    ```bash
-   python3.11 -m venv .venv
+   uv sync --python X.Y --extra dev
+   ```
+
+4. If you do not use `uv`, create the environment manually:
+
+   ```bash
+   pythonX.Y -m venv .venv
    .venv/bin/pip install -r requirements.txt
    ```
 
-4. Start IDA Pro.
-5. Open a binary.
-6. Open **View > IDA Chat**.
-7. Complete the setup wizard on first launch.
+5. Start IDA Pro.
+6. Open a binary.
+7. Open **View > IDA Chat**.
+8. Complete the setup wizard on first launch.
 
 Important notes for source checkouts:
 
-- IDA 9.3 embeds Python 3.11, so use Python 3.11 for the repo `.venv` too.
+- The repo `.venv` must use the same Python major.minor version as your IDA build.
 - The plugin loads runtime dependencies from this repo's `.venv` when opened from source.
 - If the wrong Python version is used for `.venv`, the plugin may fail to load dependencies inside IDA.
+
+Example:
+
+- if IDA reports Python `3.11`, use `uv sync --python 3.11 --extra dev`
+- if IDA reports Python `3.12`, use `uv sync --python 3.12 --extra dev`
 
 The runtime dependencies used by the chat and markdown rendering live in [requirements.txt](requirements.txt).
 
@@ -186,12 +203,12 @@ The plugin automatically captures the binary context (current function, cursor a
 
 ### Keyboard Shortcuts
 
-| Shortcut          | Windows / Linux  | macOS            |
-| ----------------- | ---------------- | ---------------- |
-| Send message      | `Enter`          | `Enter`          |
-| New line          | `Shift+Enter`    | `Shift+Enter`    |
-| Stop generation   | `Esc`            | `Esc`            |
-| Message history   | `↑ / ↓`          | `↑ / ↓`          |
+| Shortcut        | Windows / Linux | macOS         |
+| --------------- | --------------- | ------------- |
+| Send message    | `Enter`         | `Enter`       |
+| New line        | `Shift+Enter`   | `Shift+Enter` |
+| Stop generation | `Esc`           | `Esc`         |
+| Message history | `↑ / ↓`         | `↑ / ↓`       |
 
 ---
 
