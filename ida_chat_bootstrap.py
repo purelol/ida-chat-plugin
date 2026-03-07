@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import importlib.util
 import site
 import sys
@@ -54,11 +53,15 @@ def _add_project_environment() -> None:
         site.addsitedir(str(site_packages))
 
 
+def _current_python_tag() -> str:
+    return f"python{sys.version_info.major}.{sys.version_info.minor}"
+
+
 def _project_site_packages() -> list[Path]:
     candidates = [
         VENV_DIR / "Lib" / "site-packages",
-        *sorted((VENV_DIR / "lib").glob("python*/site-packages")),
-        *sorted((VENV_DIR / "lib64").glob("python*/site-packages")),
+        VENV_DIR / "lib" / _current_python_tag() / "site-packages",
+        VENV_DIR / "lib64" / _current_python_tag() / "site-packages",
     ]
     return [path for path in candidates if path.exists()]
 

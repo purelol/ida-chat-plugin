@@ -64,11 +64,26 @@ def test_project_site_packages_discovers_common_virtualenv_layouts(tmp_path, mon
     win_site = tmp_path / "Lib" / "site-packages"
     win_site.mkdir(parents=True)
     monkeypatch.setattr(bootstrap, "VENV_DIR", tmp_path)
+    monkeypatch.setattr(bootstrap, "_current_python_tag", lambda: "python3.11")
 
     paths = bootstrap._project_site_packages()
 
     assert lib_site in paths
     assert win_site in paths
+
+
+def test_project_site_packages_ignores_mismatched_python_versions(tmp_path, monkeypatch):
+    matching_site = tmp_path / "lib" / "python3.11" / "site-packages"
+    matching_site.mkdir(parents=True)
+    mismatched_site = tmp_path / "lib" / "python3.12" / "site-packages"
+    mismatched_site.mkdir(parents=True)
+    monkeypatch.setattr(bootstrap, "VENV_DIR", tmp_path)
+    monkeypatch.setattr(bootstrap, "_current_python_tag", lambda: "python3.11")
+
+    paths = bootstrap._project_site_packages()
+
+    assert matching_site in paths
+    assert mismatched_site not in paths
 
 
 def test_bootstrap_runtime_dependencies_raises_actionable_error(monkeypatch):
