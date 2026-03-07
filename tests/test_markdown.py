@@ -37,13 +37,14 @@ def test_render_qt_markdown_styles_code_blocks_and_links():
         "See [docs](https://example.com), call `db.functions.rename()`.\n\n```python\nprint('hi')\n```",
         colors,
     )
+    info_text = str(colors["info_text"])
 
     assert 'href="https://example.com"' in html
     assert "text-decoration: none" in html
     assert "background-color" in html
     assert "font-family" in html
     assert "Code · python" in html
-    assert colors["info_text"] in html
+    assert info_text in html
 
 
 def test_render_web_markdown_styles_ordered_lists_and_multiparagraph_quotes():
