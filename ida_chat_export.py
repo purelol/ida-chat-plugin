@@ -460,14 +460,13 @@ def render_transcript_html(
       padding: 32px 20px 56px;
     }}
 
-    .hero {{
-      background: color-mix(in srgb, var(--header-bg) 88%, transparent);
-      border: 1px solid var(--border);
-      border-radius: 26px;
-      padding: 24px;
-      backdrop-filter: blur(18px);
-      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.08);
-    }}
+	    .hero {{
+	      background: color-mix(in srgb, var(--header-bg) 88%, transparent);
+	      border: 1px solid var(--border);
+	      border-radius: 26px;
+	      padding: 24px;
+	      backdrop-filter: blur(18px);
+	    }}
 
     .hero-top {{
       display: flex;
@@ -631,15 +630,14 @@ def render_transcript_html(
       color: var(--danger-text);
     }}
 
-    .transcript-shell {{
-      margin-top: 22px;
-      background: color-mix(in srgb, var(--surface) 94%, transparent);
-      border: 1px solid var(--border);
-      border-radius: 28px;
-      overflow: hidden;
-      box-shadow: 0 20px 65px rgba(0, 0, 0, 0.08);
-      backdrop-filter: blur(14px);
-    }}
+	    .transcript-shell {{
+	      margin-top: 22px;
+	      background: color-mix(in srgb, var(--surface) 94%, transparent);
+	      border: 1px solid var(--border);
+	      border-radius: 28px;
+	      overflow: hidden;
+	      backdrop-filter: blur(14px);
+	    }}
 
     .transcript-header {{
       display: flex;
@@ -684,14 +682,13 @@ def render_transcript_html(
       gap: 8px;
     }}
 
-    .user-bubble {{
-      max-width: min(72ch, 100%);
-      padding: 12px 16px;
-      border-radius: 18px;
-      background: var(--user-bg);
-      color: var(--user-fg);
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-    }}
+	    .user-bubble {{
+	      max-width: min(72ch, 100%);
+	      padding: 12px 16px;
+	      border-radius: 18px;
+	      background: var(--user-bg);
+	      color: var(--user-fg);
+	    }}
 
     .transcript-message-assistant,
     .transcript-message-tool,
