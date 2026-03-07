@@ -450,6 +450,46 @@ def line_edit_style(colors: dict[str, object], radius: int = 12) -> str:
     """
 
 
+class CopyTextButton(QPushButton):
+    """Compact button that copies dynamic text to the clipboard with inline feedback."""
+
+    def __init__(
+        self,
+        text_supplier: Callable[[], str],
+        *,
+        default_label: str = "Copy",
+        parent=None,
+    ):
+        super().__init__(default_label, parent)
+        self._text_supplier = text_supplier
+        self._default_label = default_label
+        self._reset_pending = False
+        self.clicked.connect(self._copy_text)
+
+    def _copy_text(self) -> None:
+        clipboard_text = self._text_supplier().strip()
+        app = _qt_app()
+        clipboard = app.clipboard() if app else None
+        if clipboard is None or not clipboard_text:
+            self._show_feedback("Unavailable")
+            return
+        clipboard.setText(clipboard_text)
+        self._show_feedback("Copied")
+
+    def _show_feedback(self, label: str) -> None:
+        self.setText(label)
+        self.setEnabled(False)
+        if self._reset_pending:
+            return
+        self._reset_pending = True
+        QTimer.singleShot(1200, self._reset_label)
+
+    def _reset_label(self) -> None:
+        self._reset_pending = False
+        self.setText(self._default_label)
+        self.setEnabled(True)
+
+
 def status_banner_style(colors: dict[str, object], tone: str = "neutral") -> str:
     """Shared inline status banner styling."""
     palette = {
@@ -743,10 +783,16 @@ class CollapsibleSection(QFrame):
             layout.setContentsMargins(6, 6, 6, 6)
             layout.setSpacing(6)
 
-        # Header with toggle button
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(8)
+
         self.header = QPushButton()
         self._update_header_text()
         self.header.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.header.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         if self._flat:
             self.header.setStyleSheet(f"""
                 QPushButton {{
@@ -781,7 +827,15 @@ class CollapsibleSection(QFrame):
                 }}
             """)
         self.header.clicked.connect(self._toggle)
-        layout.addWidget(self.header)
+        header_row.addWidget(self.header, stretch=1)
+
+        self.copy_btn = CopyTextButton(lambda: self._content, parent=self)
+        self.copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.copy_btn.setStyleSheet(button_style(colors, "ghost", compact=True))
+        header_row.addWidget(
+            self.copy_btn, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight
+        )
+        layout.addLayout(header_row)
 
         # Content area
         self.content_frame = QFrame()
@@ -1142,6 +1196,7 @@ class SessionsSidebar(QFrame):
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search chats...")
+        self.search_input.setClearButtonEnabled(True)
         self.search_input.setStyleSheet(
             line_edit_style(colors, radius=_coerce_int(colors["radius_lg"], 12))
         )
@@ -1208,6 +1263,46 @@ class SessionsSidebar(QFrame):
         self.list_widget.itemSelectionChanged.connect(self._resume_selected_if_needed)
         self.list_widget.itemActivated.connect(lambda _item: self._resume_selected())
         layout.addWidget(self.list_widget, stretch=1)
+
+        self.empty_state = QFrame()
+        self.empty_state.setVisible(False)
+        self.empty_state.setStyleSheet(f"""
+            QFrame {{
+                background-color: {colors["surface"]};
+                border: 1px solid {colors["border"]};
+                border-radius: {colors["radius_lg"]}px;
+            }}
+        """)
+        empty_layout = QVBoxLayout(self.empty_state)
+        empty_layout.setContentsMargins(16, 18, 16, 18)
+        empty_layout.setSpacing(8)
+
+        self.empty_state_title = QLabel("No sessions yet")
+        self.empty_state_title.setStyleSheet(
+            f"QLabel {{ color: {colors['text']}; font-size: 13px; font-weight: 600; background: transparent; border: none; }}"
+        )
+        empty_layout.addWidget(
+            self.empty_state_title, alignment=Qt.AlignmentFlag.AlignHCenter
+        )
+
+        self.empty_state_body = QLabel(
+            "Start a new chat and your saved sessions will appear here."
+        )
+        self.empty_state_body.setWordWrap(True)
+        self.empty_state_body.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_state_body.setStyleSheet(
+            f"QLabel {{ color: {colors['text_muted']}; font-size: 11px; line-height: 1.45; background: transparent; border: none; }}"
+        )
+        empty_layout.addWidget(self.empty_state_body)
+
+        self.empty_state_action = QPushButton("New Chat")
+        self.empty_state_action.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.empty_state_action.setStyleSheet(button_style(colors, "secondary", compact=True))
+        self.empty_state_action.clicked.connect(self._handle_empty_state_action)
+        empty_layout.addWidget(
+            self.empty_state_action, alignment=Qt.AlignmentFlag.AlignHCenter
+        )
+        layout.addWidget(self.empty_state)
 
         self.setMinimumWidth(280)
         self.setMaximumWidth(360)
@@ -1347,11 +1442,18 @@ class SessionsSidebar(QFrame):
         layout.addLayout(meta_row)
         return row
 
+    def _handle_empty_state_action(self):
+        if self.search_input.text().strip():
+            self.search_input.clear()
+            return
+        self.new_chat_requested.emit()
+
     def _apply_filter(self):
         self._suppress_selection_resume = True
         self.list_widget.clear()
         current_item = None
-        for session in self._visible_sessions():
+        visible_sessions = self._visible_sessions()
+        for session in visible_sessions:
             item = QListWidgetItem()
             item.setData(Qt.ItemDataRole.UserRole, session)
             item.setToolTip(str(session.get("first_message") or ""))
@@ -1361,6 +1463,22 @@ class SessionsSidebar(QFrame):
             self.list_widget.setItemWidget(item, row)
             if session.get("is_current"):
                 current_item = item
+        has_sessions = bool(visible_sessions)
+        self.list_widget.setVisible(has_sessions)
+        self.empty_state.setVisible(not has_sessions)
+        if not has_sessions:
+            if self.search_input.text().strip():
+                self.empty_state_title.setText("No matching sessions")
+                self.empty_state_body.setText(
+                    "Try a shorter query, or clear the search to see every saved chat."
+                )
+                self.empty_state_action.setText("Clear Search")
+            else:
+                self.empty_state_title.setText("No sessions yet")
+                self.empty_state_body.setText(
+                    "Start a new chat and your saved sessions will appear here."
+                )
+                self.empty_state_action.setText("New Chat")
         if current_item:
             self.list_widget.setCurrentItem(current_item)
         self._suppress_selection_resume = False
@@ -1464,6 +1582,13 @@ class CodeBlock(QFrame):
         )
         header_layout.addWidget(heading)
         header_layout.addStretch(1)
+
+        copy_btn = CopyTextButton(lambda: self.body, parent=self)
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        copy_btn.setStyleSheet(button_style(colors, "ghost", compact=True))
+        header_layout.addWidget(
+            copy_btn, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight
+        )
         layout.addWidget(header)
 
         body_wrap = QFrame()
