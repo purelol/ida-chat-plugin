@@ -331,11 +331,11 @@ def apply_selection_palette():
     colors = get_ida_colors()
     is_dark = str(colors.get("app_bg", "#ffffff")).lower() not in ("#ffffff", "#fafafa")
     if is_dark:
-        sel_bg = QColor(11, 30, 27)    # teal-900
+        sel_bg = QColor(11, 30, 27)  # teal-900
         sel_fg = QColor(89, 193, 178)  # teal-300
     else:
         sel_bg = QColor(204, 251, 248)  # teal-100
-        sel_fg = QColor(52, 119, 110)   # teal-800
+        sel_fg = QColor(52, 119, 110)  # teal-800
     palette = app.palette()
     palette.setColor(QPalette.ColorRole.Highlight, sel_bg)
     palette.setColor(QPalette.ColorRole.HighlightedText, sel_fg)
@@ -721,7 +721,9 @@ class CollapsibleSection(QFrame):
         colors = get_ida_colors()
 
         if self._flat:
-            self.setStyleSheet("QFrame { background-color: transparent; border: none; }")
+            self.setStyleSheet(
+                "QFrame { background-color: transparent; border: none; }"
+            )
         else:
             outer_bg = colors["surface"]
             outer_border = colors["border"]
@@ -964,16 +966,12 @@ class MarkdownBubble(QFrame):
             self._browser.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
             )
-            self.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
-            )
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         else:
             self._browser.setSizePolicy(
                 QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed
             )
-            self.setSizePolicy(
-                QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum
-            )
+            self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum)
         self.setStyleSheet(
             f"""
             QFrame {{
@@ -1002,6 +1000,10 @@ class MarkdownBubble(QFrame):
             f"{html_text}</div>"
         )
         self._browser.set_html_fragment(wrapped)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._browser._sync_height()
 
     def sizeHint(self) -> QSize:
         browser_hint = self._browser.sizeHint()
@@ -1184,8 +1186,12 @@ class SessionsSidebar(QFrame):
             """)
             sort_switch_layout.addWidget(button)
 
-        self.sort_latest_btn.clicked.connect(lambda: self._on_sort_changed("updated_desc"))
-        self.sort_oldest_btn.clicked.connect(lambda: self._on_sort_changed("updated_asc"))
+        self.sort_latest_btn.clicked.connect(
+            lambda: self._on_sort_changed("updated_desc")
+        )
+        self.sort_oldest_btn.clicked.connect(
+            lambda: self._on_sort_changed("updated_asc")
+        )
         self._update_sort_buttons()
 
         controls_row = QHBoxLayout()
@@ -1235,8 +1241,10 @@ class SessionsSidebar(QFrame):
 
         reverse = self._sort_mode != "updated_asc"
         sessions.sort(
-            key=lambda session: self._session_sort_key(session, "updated_at")
-            or self._session_sort_key(session, "created_at"),
+            key=lambda session: (
+                self._session_sort_key(session, "updated_at")
+                or self._session_sort_key(session, "created_at")
+            ),
             reverse=reverse,
         )
         return sessions
@@ -1390,6 +1398,7 @@ class SessionsSidebar(QFrame):
             return
         self._resume_selected()
 
+
 class CodeBlock(QFrame):
     """Monospaced code/output panel used across chat cards."""
 
@@ -1441,7 +1450,6 @@ class CodeBlock(QFrame):
             QFrame {{
                 background-color: {colors["code_bg_alt"]};
                 border: none;
-                border-bottom: 1px solid {colors["code_border"]};
                 border-top-left-radius: {colors["radius_lg"]}px;
                 border-top-right-radius: {colors["radius_lg"]}px;
             }}
@@ -1468,9 +1476,9 @@ class CodeBlock(QFrame):
         body.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         body.set_html_fragment(
             (
-                f"<pre style=\"margin: 0; white-space: pre-wrap; word-break: normal; "
+                f'<pre style="margin: 0; white-space: pre-wrap; word-break: normal; '
                 f"font-family: '{colors['font_mono']}'; font-size: 11px; line-height: 1.6; "
-                f"color: {text_color};\">{html.escape(self.body)}</pre>"
+                f'color: {text_color};">{html.escape(self.body)}</pre>'
             )
         )
         body_layout.addWidget(body)
@@ -1531,9 +1539,25 @@ class ScriptReviewCard(QFrame):
         title_block.addWidget(heading)
         heading_row.addLayout(title_block, stretch=1)
 
-        _risk_labels = {"mutating": "MUTATING", "read-only": "READ ONLY", "unknown": "UNKNOWN"}
-        _risk_border = colors["danger_border"] if self.request.risk == "mutating" else colors["success_border"] if self.request.risk == "read-only" else colors["warning_border"]
-        _risk_bg = colors["danger_soft"] if self.request.risk == "mutating" else colors["success_soft"] if self.request.risk == "read-only" else colors["warning_soft"]
+        _risk_labels = {
+            "mutating": "MUTATING",
+            "read-only": "READ ONLY",
+            "unknown": "UNKNOWN",
+        }
+        _risk_border = (
+            colors["danger_border"]
+            if self.request.risk == "mutating"
+            else colors["success_border"]
+            if self.request.risk == "read-only"
+            else colors["warning_border"]
+        )
+        _risk_bg = (
+            colors["danger_soft"]
+            if self.request.risk == "mutating"
+            else colors["success_soft"]
+            if self.request.risk == "read-only"
+            else colors["warning_soft"]
+        )
         risk = QLabel(_risk_labels.get(self.request.risk, self.request.risk.upper()))
         risk.setAlignment(Qt.AlignmentFlag.AlignCenter)
         risk.setStyleSheet(f"""
@@ -1577,7 +1601,9 @@ class ScriptReviewCard(QFrame):
         """)
         layout.addWidget(self.status_label)
 
-        details = CollapsibleSection("Full Script", self.request.code, collapsed=True, flat=True)
+        details = CollapsibleSection(
+            "Full Script", self.request.code, collapsed=True, flat=True
+        )
         layout.addWidget(details)
 
         self.buttons_row = QHBoxLayout()
@@ -1728,9 +1754,7 @@ class ProgressTimeline(QFrame):
                 }}
                 """
             )
-            self.timeline_strip_layout.addWidget(
-                pill, 0, Qt.AlignmentFlag.AlignVCenter
-            )
+            self.timeline_strip_layout.addWidget(pill, 0, Qt.AlignmentFlag.AlignVCenter)
 
             if position == len(steps) - 1:
                 continue
@@ -1776,13 +1800,13 @@ class ChatMessage(QFrame):
         layout.setSpacing(10)
 
         if self.is_user:
-            # User message - right aligned, bubble style
+            # User message - right aligned, sized to content up to max_width
             self.message_widget = MarkdownBubble(
                 text,
                 background=_coerce_str(colors["user_bubble"]),
                 border=_coerce_str(colors["user_bubble"]),
                 text_color=_coerce_str(colors["user_bubble_text"]),
-                max_width=520,
+                max_width=760,
                 fill_width=False,
             )
             self.message_widget.setSizePolicy(
@@ -1797,9 +1821,7 @@ class ChatMessage(QFrame):
                 self.message_widget.setTextFormat(Qt.TextFormat.RichText)
                 self.message_widget.setWordWrap(True)
                 self.message_widget.setTextInteractionFlags(TEXT_SELECTABLE_FLAGS)
-                self.message_widget.setText(
-                    html.escape(text)
-                )
+                self.message_widget.setText(html.escape(text))
                 self.message_widget.setStyleSheet(f"""
                     QLabel {{
                         background-color: {colors["info_soft"]};
@@ -2860,9 +2882,7 @@ class OnboardingPanel(QFrame):
         self.back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.back_btn.setStyleSheet(button_style(colors, "ghost", compact=True))
         self.back_btn.clicked.connect(self.back_requested.emit)
-        self._top_row.addWidget(
-            self.back_btn, alignment=Qt.AlignmentFlag.AlignTop
-        )
+        self._top_row.addWidget(self.back_btn, alignment=Qt.AlignmentFlag.AlignTop)
         self._top_row.addStretch(1)
         self._top_row_widget.hide()
         self._settings_layout.addWidget(self._top_row_widget)
@@ -3220,9 +3240,7 @@ class OnboardingPanel(QFrame):
         """Select a Claude model card."""
         self._selected_model_profile = profile_key
         self._set_verification_state("unverified")
-        self._clear_connection_feedback(
-            "Model updated. Run a test to verify it."
-        )
+        self._clear_connection_feedback("Model updated. Run a test to verify it.")
         self._apply_model_selection()
         self._refresh_selection_summary()
         self._refresh_actions()
@@ -3504,7 +3522,9 @@ class OnboardingPanel(QFrame):
         # Emit completion signal
         self.onboarding_complete.emit()
 
-    def load_current_settings(self, verification_state: VerificationState = "unverified"):
+    def load_current_settings(
+        self, verification_state: VerificationState = "unverified"
+    ):
         """Load current settings into the UI (for settings mode)."""
         auth_type = get_auth_type()
         api_key = get_api_key()
@@ -3738,9 +3758,7 @@ class IDAChatForm(ida_kernwin.PluginForm):
             worker.signals.error.connect(self._on_error)
             worker.signals.result.connect(self._on_result)
             worker.signals.finished.connect(self._on_finished)
-            worker.signals.session_list_updated.connect(
-                self._on_session_list_updated
-            )
+            worker.signals.session_list_updated.connect(self._on_session_list_updated)
             worker.signals.session_loaded.connect(self._on_session_loaded)
             worker.request_connect()
         except Exception as error:
@@ -3979,9 +3997,7 @@ class IDAChatForm(ida_kernwin.PluginForm):
         session_title = None
         history = self._history_or_none()
         if history is not None:
-            session_title = (
-                history.get_current_session_title().strip() or "New Chat"
-            )
+            session_title = history.get_current_session_title().strip() or "New Chat"
         elif self._connection_ready:
             session_title = "New Chat"
         state = processing_text.rstrip(".") if processing_text else None
@@ -4416,9 +4432,7 @@ class IDAChatForm(ida_kernwin.PluginForm):
         """Refresh sidebar contents after session mutations."""
         session_list = sessions if isinstance(sessions, list) else []
         typed_session_list = cast(list[dict[str, object]], session_list)
-        self.sessions_sidebar.set_sessions(
-            typed_session_list
-        )
+        self.sessions_sidebar.set_sessions(typed_session_list)
         history = self._history_or_none()
         message_count = current_session_message_count(
             typed_session_list,
@@ -4865,7 +4879,10 @@ class IDAChatForm(ida_kernwin.PluginForm):
         idb_path = Path(history.binary_path)
         default_path = str(idb_path.parent / f"{idb_path.stem}_{session_id[:8]}.html")
         dialog = QFileDialog(
-            self.root_widget, "Export chat transcript", default_path, "HTML Files (*.html)"
+            self.root_widget,
+            "Export chat transcript",
+            default_path,
+            "HTML Files (*.html)",
         )
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         dialog.setFileMode(QFileDialog.FileMode.AnyFile)

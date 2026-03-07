@@ -294,7 +294,7 @@ def render_qt_markdown(text: str, colors: dict[str, Any]) -> str:
             )
 
     for anchor in soup.find_all("a"):
-        anchor["style"] = f'color: {colors["link"]}; text-decoration: none;'
+        anchor["style"] = f"color: {colors['link']}; text-decoration: none;"
 
     for blockquote in soup.find_all("blockquote"):
         blockquote["style"] = (
@@ -360,25 +360,27 @@ def _render_qt_inline_code(content: str, colors: dict[str, Any]) -> str:
     font_mono = html.escape(str(colors.get("font_mono", "monospace")))
     if _is_ida_reference(content):
         return (
-            f'<span style="font-family: \'{font_mono}\'; '
+            f"<span style=\"font-family: '{font_mono}'; "
             f'color: {colors["info_text"]};">'
             f"{content}</span>"
         )
     return (
-        f'<span style="font-family: \'{font_mono}\'; '
-        f'background-color: {colors["code_bg_alt"]}; color: {colors["code_text"]}; '
-        f'border: 1px solid {colors["code_border"]}; border-radius: 999px; '
+        f"<span style=\"font-family: '{font_mono}'; "
+        f"background-color: {colors['code_bg_alt']}; color: {colors['code_text']}; "
+        f"border: 1px solid {colors['code_border']}; border-radius: 999px; "
         f'padding: 2px 7px;">{content}</span>'
     )
 
 
 def _render_qt_heading(content: str, colors: dict[str, Any], size: int) -> str:
-    if _is_ida_reference(BeautifulSoup(content, "html.parser").get_text("", strip=True)):
+    if _is_ida_reference(
+        BeautifulSoup(content, "html.parser").get_text("", strip=True)
+    ):
         font_mono = html.escape(str(colors.get("font_mono", "monospace")))
         return (
             f'<p style="margin: 8px 0; font-size: 13px; font-weight: 400; '
-            f'line-height: 1.5; color: {colors["info_text"]}; '
-            f'font-family: \'{font_mono}\';">{content}</p>'
+            f"line-height: 1.5; color: {colors['info_text']}; "
+            f"font-family: '{font_mono}';\">{content}</p>"
         )
     return (
         f'<p style="margin: 12px 0 8px 0; font-size: {size}px; '
@@ -399,11 +401,11 @@ def _render_qt_code_block(language: str, code: str, colors: dict[str, Any]) -> s
         f'<div style="margin: 12px 0; border: 1px solid {colors["code_border"]}; '
         f'border-radius: {colors["radius_lg"]}px; background-color: {colors["code_bg"]};">'
         f'<div style="padding: 10px 14px; background-color: {colors["code_bg_alt"]}; '
-        f'border-bottom: 1px solid {colors["code_border"]}; color: {colors["text_subtle"]}; '
+        f"color: {colors['text_subtle']}; "
         f'font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;">'
         f"{header_label}</div>"
         f'<pre style="margin: 0; padding: 14px 16px; background-color: {colors["code_bg"]}; '
-        f'color: {colors["code_text"]}; font-family: \'{font_mono}\'; '
+        f"color: {colors['code_text']}; font-family: '{font_mono}'; "
         f'font-size: 11px; line-height: 1.65; white-space: pre-wrap; word-break: normal;">{highlighted}</pre>'
         f"</div>"
     )

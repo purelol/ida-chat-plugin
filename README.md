@@ -91,30 +91,64 @@ See the plugin in both light and dark mode before you even install it.
 
 ## 🚀 Installation
 
-Make sure you have the latest version of [hcli](https://hcli.docs.hex-rays.com/) installed, then run:
+Choose one of these two paths:
 
-```bash
-hcli plugin install https://github.com/tanu360/ida-chat-plugin
-```
+### Option A: Install the released plugin with `hcli` (recommended)
 
-On first launch, a setup wizard will guide you through choosing an authentication method and model.
+This is the easiest path if you just want to use the plugin.
 
-### Source Checkout Setup
+1. Install or update [hcli](https://hcli.docs.hex-rays.com/).
+2. Install the plugin:
 
-If you are running the plugin directly from this repository inside `~/.idapro/plugins/ida-chat`, set up the project environment first:
+   ```bash
+   hcli plugin install https://github.com/tanu360/ida-chat-plugin
+   ```
 
-```bash
-uv sync --extra dev
-```
+3. Start IDA Pro.
+4. Open any binary.
+5. Open **View > IDA Chat**.
+6. Complete the setup wizard:
+   - choose an authentication mode
+   - choose the model you want to use
+   - save settings
 
-IDA uses its own embedded Python, so the plugin explicitly loads dependencies from this repo's `.venv` when opened from source. If you do not use `uv`, create the virtualenv manually:
+After that, the chat panel is ready to use.
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
+### Option B: Run directly from this source checkout
 
-The runtime dependencies used by the markdown/chat UI live in [requirements.txt](requirements.txt).
+Use this only if you are developing the plugin or testing local changes.
+
+1. Put this repository at:
+
+   ```text
+   ~/.idapro/plugins/ida-chat
+   ```
+
+2. Create the local environment with the same Python version used by IDA 9.3:
+
+   ```bash
+   uv sync --python 3.11 --extra dev
+   ```
+
+3. If you do not use `uv`, create the environment manually:
+
+   ```bash
+   python3.11 -m venv .venv
+   .venv/bin/pip install -r requirements.txt
+   ```
+
+4. Start IDA Pro.
+5. Open a binary.
+6. Open **View > IDA Chat**.
+7. Complete the setup wizard on first launch.
+
+Important notes for source checkouts:
+
+- IDA 9.3 embeds Python 3.11, so use Python 3.11 for the repo `.venv` too.
+- The plugin loads runtime dependencies from this repo's `.venv` when opened from source.
+- If the wrong Python version is used for `.venv`, the plugin may fail to load dependencies inside IDA.
+
+The runtime dependencies used by the chat and markdown rendering live in [requirements.txt](requirements.txt).
 
 ---
 
@@ -126,6 +160,16 @@ The runtime dependencies used by the markdown/chat UI live in [requirements.txt]
 2. Open **View > IDA Chat** to show the chat panel
 3. Complete the setup wizard on first run — takes about 30 seconds
 4. Type your question and press **Enter**
+
+### First-Time Setup Wizard
+
+On first launch, the plugin will ask you to choose:
+
+1. An authentication method
+2. A model
+3. Whether generated scripts should require approval before execution
+
+If you are not sure which auth mode to pick, start with **System** if Claude Code is already working on your machine.
 
 The plugin automatically captures the binary context (current function, cursor address, selection) and passes it to Claude with every message — no manual copy-paste needed.
 
@@ -164,6 +208,12 @@ Three authentication modes are supported, configurable from the setup wizard or 
 | **OAuth**   | Browser-based login via `claude setup-token`                                                                             |
 
 The System auth mode is recommended if you already have Claude Code installed.
+
+### Which Auth Mode Should You Pick?
+
+- **System**: best default if Claude Code already works on your machine
+- **OAuth**: best if you want browser-based sign-in without copying API keys
+- **API Key**: best if you prefer explicit Anthropic key-based setup
 
 ---
 
