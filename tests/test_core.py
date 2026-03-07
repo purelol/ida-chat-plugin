@@ -73,52 +73,45 @@ def test_prepare_transcript_source_redacts_paths(tmp_path):
     assert "<binary-path>" in content
 
 
-def test_export_transcript_to_dir_creates_output_directory(tmp_path, monkeypatch):
+def test_export_transcript_to_dir_creates_output_directory(tmp_path):
     session = tmp_path / "session.jsonl"
     session.write_text(
-        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}\n',
+        '{"type":"user","timestamp":"2026-03-07T10:00:00+00:00","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}\n',
         encoding="utf-8",
     )
     output_dir = tmp_path / "nested" / "export"
-
-    def fake_generate_html(source_session: Path, target_dir: Path) -> None:
-        assert source_session == session
-        assert target_dir == output_dir
-        (target_dir / "index.html").write_text("<html></html>", encoding="utf-8")
-
-    monkeypatch.setattr("ida_chat_core.claude_code_transcripts.generate_html", fake_generate_html)
 
     index_html = export_transcript_to_dir(session, output_dir)
 
     assert output_dir.exists()
     assert index_html == output_dir / "index.html"
     assert index_html.exists()
+    assert "IDA Chat Transcript" in index_html.read_text(encoding="utf-8")
 
 
-def test_export_transcript_creates_parent_directory_and_copies_pages(tmp_path, monkeypatch):
+def test_export_transcript_creates_parent_directory_and_single_html(tmp_path):
     session = tmp_path / "session.jsonl"
     session.write_text(
-        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}\n',
+        '{"type":"user","timestamp":"2026-03-07T10:00:00+00:00","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}\n'
+        '{"type":"assistant","timestamp":"2026-03-07T10:00:01+00:00","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}\n',
         encoding="utf-8",
     )
     output_path = tmp_path / "nested" / "report" / "chat.html"
 
-    def fake_generate_html(_source_session: Path, target_dir: Path) -> None:
-        (target_dir / "index.html").write_text("<html>index</html>", encoding="utf-8")
-        (target_dir / "page-001.html").write_text("<html>page</html>", encoding="utf-8")
-
-    monkeypatch.setattr("ida_chat_core.claude_code_transcripts.generate_html", fake_generate_html)
-
     export_transcript(session, output_path)
 
     assert output_path.exists()
-    assert (output_path.parent / "page-001.html").exists()
+    content = output_path.read_text(encoding="utf-8")
+    assert "IDA Chat Transcript" in content
+    assert "Conversation" in content
+    assert "hello" in content
+    assert not (output_path.parent / "page-001.html").exists()
 
 
-def test_export_transcript_removes_stale_page_files(tmp_path, monkeypatch):
+def test_export_transcript_removes_stale_page_files(tmp_path):
     session = tmp_path / "session.jsonl"
     session.write_text(
-        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}\n',
+        '{"type":"user","timestamp":"2026-03-07T10:00:00+00:00","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}\n',
         encoding="utf-8",
     )
     output_path = tmp_path / "report" / "chat.html"
@@ -126,21 +119,16 @@ def test_export_transcript_removes_stale_page_files(tmp_path, monkeypatch):
     stale_page = output_path.parent / "page-999.html"
     stale_page.write_text("<html>stale</html>", encoding="utf-8")
 
-    def fake_generate_html(_source_session: Path, target_dir: Path) -> None:
-        (target_dir / "index.html").write_text("<html>fresh</html>", encoding="utf-8")
-
-    monkeypatch.setattr("ida_chat_core.claude_code_transcripts.generate_html", fake_generate_html)
-
     export_transcript(session, output_path)
 
     assert output_path.exists()
     assert not stale_page.exists()
 
 
-def test_export_transcript_to_dir_replaces_stale_generated_files(tmp_path, monkeypatch):
+def test_export_transcript_to_dir_replaces_stale_generated_files(tmp_path):
     session = tmp_path / "session.jsonl"
     session.write_text(
-        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}\n',
+        '{"type":"user","timestamp":"2026-03-07T10:00:00+00:00","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}\n',
         encoding="utf-8",
     )
     output_dir = tmp_path / "export"
@@ -149,16 +137,10 @@ def test_export_transcript_to_dir_replaces_stale_generated_files(tmp_path, monke
     stale_page = output_dir / "page-002.html"
     stale_page.write_text("<html>stale</html>", encoding="utf-8")
 
-    def fake_generate_html(_source_session: Path, target_dir: Path) -> None:
-        (target_dir / "index.html").write_text("<html>fresh</html>", encoding="utf-8")
-        (target_dir / "page-001.html").write_text("<html>page</html>", encoding="utf-8")
-
-    monkeypatch.setattr("ida_chat_core.claude_code_transcripts.generate_html", fake_generate_html)
-
     index_html = export_transcript_to_dir(session, output_dir)
 
-    assert index_html.read_text(encoding="utf-8") == "<html>fresh</html>"
-    assert (output_dir / "page-001.html").exists()
+    assert "IDA Chat Transcript" in index_html.read_text(encoding="utf-8")
+    assert not (output_dir / "page-001.html").exists()
     assert not stale_page.exists()
 
 

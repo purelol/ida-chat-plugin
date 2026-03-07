@@ -2255,6 +2255,7 @@ class ModelOptionCard(QFrame):
         self.title = title
         self.description = description
         self.tone = tone
+        self._selected = False
         self._setup_ui()
 
     def _tone_colors(self, colors: dict[str, object]) -> tuple[str, str, str]:
@@ -2308,17 +2309,26 @@ class ModelOptionCard(QFrame):
         copy_layout.addWidget(self.description_label)
 
         layout.addLayout(copy_layout, stretch=1)
+        self.state_label = QLabel("Selected")
+        self.state_label.setObjectName("modelOptionState")
+        self.state_label.setVisible(False)
+        layout.addWidget(
+            self.state_label,
+            alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
+        )
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
     def set_selected(self, selected: bool):
         """Apply the selected or idle card appearance."""
+        self._selected = selected
         colors = get_ida_colors()
         tone_bg, tone_border, tone_text = self._tone_colors(colors)
         card_bg = tone_bg if selected else colors["surface"]
         card_border = tone_border if selected else colors["border"]
         title_color = tone_text if selected else colors["text"]
         desc_color = tone_text if selected else colors["text_muted"]
+        self.state_label.setVisible(selected)
         self.setStyleSheet(f"""
             QFrame#modelOptionCard {{
                 background-color: {card_bg};
@@ -2346,6 +2356,17 @@ class ModelOptionCard(QFrame):
                 border: none;
                 font-size: 11px;
                 line-height: 1.45;
+            }}
+            QLabel#modelOptionState {{
+                color: {tone_text};
+                background-color: {tone_bg};
+                border: 1px solid {tone_border};
+                border-radius: 999px;
+                padding: 4px 8px;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
             }}
         """)
 
@@ -2434,6 +2455,7 @@ class AuthOptionTab(QFrame):
         badge_bg = tone_bg if selected else colors["surface_alt"]
         badge_border = tone_border if selected else colors["border"]
         badge_text = tone_text if selected else colors["text_subtle"]
+        self.badge_label.setText("✓" if selected else self.step_label)
         self.setStyleSheet(f"""
             QFrame#authOptionTab {{
                 background-color: {bg_color};
@@ -3078,6 +3100,7 @@ class OnboardingPanel(QFrame):
         )
         controls_enabled = not self._controls_busy
         credentials_ready = self._has_credentials_ready()
+        save_ready = self._can_save_current_settings()
 
         for button in self._auth_buttons.values():
             button.setEnabled(controls_enabled)
@@ -3099,7 +3122,21 @@ class OnboardingPanel(QFrame):
         )
         self.oauth_launch_btn.setEnabled(oauth_login_available)
         self.test_btn.setEnabled(controls_enabled and credentials_ready)
-        self.save_btn.setEnabled(controls_enabled and self._can_save_current_settings())
+        self.save_btn.setEnabled(controls_enabled and save_ready)
+        if self._controls_busy:
+            self.test_btn.setToolTip("Verification is already running.")
+            self.save_btn.setToolTip("Wait for verification to finish.")
+        else:
+            self.test_btn.setToolTip(
+                f"Verify the selected {model_name} configuration."
+                if credentials_ready
+                else "Complete the current authentication setup before testing."
+            )
+            self.save_btn.setToolTip(
+                "Save verified settings and return to chat."
+                if save_ready
+                else f"Run Test {model_name} successfully to enable saving."
+            )
 
     def _update_density(self):
         """Keep the breathable layout while letting the form scroll when needed."""

@@ -70,7 +70,7 @@ See the plugin in both light and dark mode before you even install it.
 - **Multi-session workspace** — maintain multiple named conversations per binary; switch, rename, delete, and export from the sidebar
 - **Persistent history** — sessions saved to `~/.ida-chat/` scoped per binary, fully resumable across IDA restarts
 - **Markdown rendering** — formatted responses with syntax-highlighted code blocks and collapsible long outputs
-- **HTML transcript export** — export any session as a paginated HTML file for sharing or archiving
+- **HTML transcript export** — export any session as a single-file HTML transcript with the same visual language as the live chat UI
 - **Model selection** — choose between Claude Sonnet, Opus, Opus 1M, and Haiku from the settings panel
 
 ---

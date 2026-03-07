@@ -25,19 +25,18 @@ def test_run_transcript_command_accepts_explicit_session_path_without_index(tmp_
     )
     cli.MessageHistory.BASE_DIR = tmp_path / "missing-sessions"
 
-    def fake_export_transcript_to_dir(
+    def fake_export_transcript(
         session_file: Path,
-        output_dir: Path,
+        output_path: Path,
         *,
         redact_paths: bool = False,
         binary_path: str | None = None,
-    ) -> Path:
+    ) -> None:
         assert session_file == session
-        output_dir.mkdir(parents=True, exist_ok=True)
-        index_html = output_dir / "index.html"
-        index_html.write_text("<html></html>", encoding="utf-8")
-        return index_html
+        assert output_path.suffix == ".html"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("<html></html>", encoding="utf-8")
 
-    monkeypatch.setattr("ida_chat_core.export_transcript_to_dir", fake_export_transcript_to_dir)
+    monkeypatch.setattr("ida_chat_core.export_transcript", fake_export_transcript)
 
     assert cli.run_transcript_command([str(session), "--no-open"]) == 0
