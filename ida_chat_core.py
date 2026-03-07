@@ -18,8 +18,6 @@ import uuid
 from io import StringIO
 from pathlib import Path
 from typing import Awaitable, Callable, Protocol, TYPE_CHECKING, cast
-
-import claude_code_transcripts
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
@@ -30,6 +28,7 @@ from claude_agent_sdk import (
     ToolUseBlock,
 )
 from claude_agent_sdk.types import HookContext, HookInput, HookJSONOutput, PreToolUseHookInput, SdkBeta
+from ida_chat_export import render_transcript_html
 from ida_chat_support import (
     ConnectionTestResult,
     DiagnosticReport,
@@ -269,18 +268,7 @@ def export_transcript(
     redact_paths: bool = False,
     binary_path: str | None = None,
 ) -> None:
-    """Export a chat session to HTML files.
-
-    Generates index.html and page-XXX.html files in the same directory as output_path.
-
-    Args:
-        session_file: Path to the JSONL session file.
-        output_path: Path for the main output HTML file (index.html will be renamed to this).
-
-    Raises:
-        FileNotFoundError: If session_file doesn't exist.
-        Exception: If HTML generation fails.
-    """
+    """Export a chat session to a single standalone HTML file."""
     if not session_file.exists():
         raise FileNotFoundError(f"Session file not found: {session_file}")
 
@@ -288,22 +276,14 @@ def export_transcript(
     output_dir.mkdir(parents=True, exist_ok=True)
     _clear_generated_transcript_files(output_dir)
 
-    # Generate into a temp directory, then copy all HTML files
     with _prepared_transcript_source(session_file, redact_paths, binary_path) as source_session:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir)
-            claude_code_transcripts.generate_html(source_session, tmp_path)
-
-            # Copy index.html to the target path
-            generated_html = tmp_path / "index.html"
-            if generated_html.exists():
-                shutil.copy2(generated_html, output_path)
-            else:
-                raise RuntimeError("HTML generation failed: index.html not created")
-
-            # Copy all page-XXX.html files
-            for page_file in tmp_path.glob("page-*.html"):
-                shutil.copy2(page_file, output_dir / page_file.name)
+        html_output = render_transcript_html(
+            source_session,
+            metadata_file=session_file,
+            binary_path=binary_path,
+            paths_redacted=redact_paths,
+        )
+        output_path.write_text(html_output, encoding="utf-8")
 
     logger.info(f"Exported transcript to {output_path}")
 
@@ -315,27 +295,21 @@ def export_transcript_to_dir(
     redact_paths: bool = False,
     binary_path: str | None = None,
 ) -> Path:
-    """Export a chat session to a directory (with all assets).
-
-    Args:
-        session_file: Path to the JSONL session file.
-        output_dir: Directory to generate HTML into.
-
-    Returns:
-        Path to the generated index.html.
-
-    Raises:
-        FileNotFoundError: If session_file doesn't exist.
-    """
+    """Export a chat session to `output_dir/index.html` as a single HTML file."""
     if not session_file.exists():
         raise FileNotFoundError(f"Session file not found: {session_file}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     _clear_generated_transcript_files(output_dir, remove_index=True)
-    with _prepared_transcript_source(session_file, redact_paths, binary_path) as source_session:
-        claude_code_transcripts.generate_html(source_session, output_dir)
-    logger.info(f"Exported transcript to {output_dir}")
-    return output_dir / "index.html"
+    index_html = output_dir / "index.html"
+    export_transcript(
+        session_file,
+        index_html,
+        redact_paths=redact_paths,
+        binary_path=binary_path,
+    )
+    logger.info(f"Exported transcript to {index_html}")
+    return index_html
 
 
 async def test_claude_connection(

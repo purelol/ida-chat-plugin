@@ -173,14 +173,14 @@ class IDAChat:
 
 
 def run_transcript_command(args: list[str]) -> int:
-    """Run the transcript subcommand to generate HTML from sessions."""
+    """Run the transcript subcommand to generate a single HTML transcript."""
     from datetime import datetime
 
-    from ida_chat_core import export_transcript_to_dir
+    from ida_chat_core import export_transcript
 
     parser = argparse.ArgumentParser(
         prog="ida-chat transcript",
-        description="Generate HTML transcript from IDA Chat sessions"
+        description="Generate a single-file HTML transcript from IDA Chat sessions"
     )
     parser.add_argument(
         "session",
@@ -189,7 +189,7 @@ def run_transcript_command(args: list[str]) -> int:
     )
     parser.add_argument(
         "-o", "--output",
-        help="Output directory (uses temp dir and opens browser if omitted)"
+        help="Output HTML file (uses a temp HTML file and opens browser if omitted)"
     )
     parser.add_argument(
         "-l", "--list",
@@ -328,17 +328,19 @@ def run_transcript_command(args: list[str]) -> int:
 
     # Generate HTML
     if parsed.output:
-        output_dir = Path(parsed.output)
+        output_path = Path(parsed.output)
+        if output_path.suffix.lower() != ".html":
+            output_path = output_path / "index.html"
     else:
-        output_dir = Path(tempfile.gettempdir()) / f"ida-chat-{session_file.stem}"
+        output_path = Path(tempfile.gettempdir()) / f"ida-chat-{session_file.stem}.html"
 
     print(f"Generating transcript from: {session_file}")
-    print(f"Output directory: {output_dir}")
+    print(f"Output file: {output_path}")
 
-    index_html = export_transcript_to_dir(session_file, output_dir)
+    export_transcript(session_file, output_path)
 
-    if not parsed.no_open and not parsed.output:
-        index_url = index_html.resolve().as_uri()
+    if not parsed.no_open:
+        index_url = output_path.resolve().as_uri()
         print(f"Opening: {index_url}")
         webbrowser.open(index_url)
 

@@ -3283,7 +3283,6 @@ class OnboardingPanel(QFrame):
         auth_type = get_auth_type()
         api_key = get_api_key()
         self._selected_model_profile = get_model_profile()
-        self._set_verification_state(verification_state)
         self._apply_model_selection()
         self.key_input.blockSignals(True)
         self.key_input.clear()
@@ -3306,6 +3305,7 @@ class OnboardingPanel(QFrame):
         self.auto_context_cb.setChecked(get_auto_context_enabled())
         self.redact_export_cb.setChecked(get_redact_export_paths())
         self._set_auth_type(self._selected_auth_type)
+        self._set_verification_state(verification_state)
 
         # Reset status
         if verification_state == "verified":
@@ -3342,6 +3342,8 @@ class OnboardingPanel(QFrame):
     def _set_verification_state(self, state: VerificationState):
         """Track whether settings are verified, unverified, or actively verifying."""
         self._verification_state = state
+        if hasattr(self, "save_btn"):
+            self._refresh_actions()
 
     def _refresh_artwork_pixmap(self):
         """Scale the splash artwork to the available left column and anchor it to the bottom."""

@@ -31,7 +31,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["."]
-only-include = ["ida_chat_cli.py", "ida_chat_core.py", "ida_chat_history.py", "ida_chat_support.py", "project"]
+only-include = ["ida_chat_cli.py", "ida_chat_core.py", "ida_chat_export.py", "ida_chat_history.py", "ida_chat_support.py", "project"]
 
 [project.optional-dependencies]
 dev = [
