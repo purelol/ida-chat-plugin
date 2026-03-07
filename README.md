@@ -125,45 +125,53 @@ Use this only if you are developing the plugin or testing local changes.
    ~/.idapro/plugins/ida-chat
    ```
 
-2. Find the Python version used by your IDA build.
+2. Create the local environment.
 
-   Open IDA and check the startup log, or run this in the IDA Python console:
-
-   ```python
-   import sys
-   print(f"{sys.version_info.major}.{sys.version_info.minor}")
-   ```
-
-   Use that `X.Y` value in the next steps.
-
-3. Create the local environment with the same Python major.minor version:
+   On macOS or Linux:
 
    ```bash
-   uv sync --python X.Y --extra dev
+   uv sync --python python3 --extra dev
    ```
 
-4. If you do not use `uv`, create the environment manually:
+   On Windows:
 
    ```bash
-   pythonX.Y -m venv .venv
-   .venv/bin/pip install -r requirements.txt
+   uv sync --python python --extra dev
    ```
 
-5. Start IDA Pro.
-6. Open a binary.
-7. Open **View > IDA Chat**.
-8. Complete the setup wizard on first launch.
+3. If you do not use `uv`, create the environment manually.
+
+   On macOS or Linux:
+
+   ```bash
+   python3 -m venv .venv
+   .venv/bin/python -m pip install -r requirements.txt
+   ```
+
+   On Windows:
+
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\python -m pip install -r requirements.txt
+   ```
+
+4. Start IDA Pro.
+5. Open a binary.
+6. Open **View > IDA Chat**.
+7. Complete the setup wizard on first launch.
 
 Important notes for source checkouts:
 
 - The repo `.venv` must use the same Python major.minor version as your IDA build.
 - The plugin loads runtime dependencies from this repo's `.venv` when opened from source.
 - If the wrong Python version is used for `.venv`, the plugin may fail to load dependencies inside IDA.
+- If `python3` on macOS/Linux or `python` on Windows points to the wrong version, use the Python executable that matches your IDA build instead.
+- To check IDA's embedded Python version, open the IDA Python console and run:
 
-Example:
-
-- if IDA reports Python `3.11`, use `uv sync --python 3.11 --extra dev`
-- if IDA reports Python `3.12`, use `uv sync --python 3.12 --extra dev`
+  ```python
+  import sys
+  print(f"{sys.version_info.major}.{sys.version_info.minor}")
+  ```
 
 The runtime dependencies used by the chat and markdown rendering live in [requirements.txt](requirements.txt).
 
