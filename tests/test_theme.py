@@ -13,6 +13,7 @@ def test_build_ui_colors_light_mode_matches_vercel_tokens():
     assert colors["link"] == "#1b6aff"
     assert colors["danger"] == "#f43f5e"
     assert colors["danger_text"] == "#9f1239"
+    assert colors["daisy_text"] == "#6d28d9"
     assert colors["radius_md"] == 10
 
 
@@ -27,6 +28,7 @@ def test_build_ui_colors_dark_mode_matches_vercel_tokens():
     assert colors["user_bubble"] == "#ededed"
     assert colors["link"] == "#5b9aff"
     assert colors["danger"] == "#f43f5e"
+    assert colors["daisy_text"] == "#ddd6fe"
     assert colors["warning_text"] == "#fbbf24"
     assert colors["radius_xl"] == 16
 
@@ -36,6 +38,7 @@ def test_status_tints_are_softened_versions_of_base_intents():
     dark = build_ui_colors(True)
 
     assert light["danger_soft"] != light["danger"]
+    assert light["daisy_soft"] != light["daisy"]
     assert light["warning_soft"] != light["warning"]
     assert dark["success_soft"] != dark["success"]
     assert light["success_border"] != light["border"]

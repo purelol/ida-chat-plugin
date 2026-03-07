@@ -206,7 +206,7 @@ MODEL_PRESETS: dict[str, ModelPreset] = {
         "model": "haiku",
         "betas": [],
         "badge": "H",
-        "tone": "warning",
+        "tone": "daisy",
     },
 }
 AUTH_OPTIONS: dict[str, dict[str, str]] = {
@@ -230,7 +230,7 @@ AUTH_OPTIONS: dict[str, dict[str, str]] = {
         "tab": "API Key",
         "title": "Use an Anthropic Console key",
         "description": "Use an API key when billing should come from Anthropic Console usage instead of your Claude subscription.",
-        "tone": "warning",
+        "tone": "daisy",
         "breadcrumb": "API key",
         "placeholder": "Paste your Anthropic API key...",
     },
@@ -2476,6 +2476,12 @@ class ModelOptionCard(QFrame):
                 str(colors["success_border"]),
                 str(colors["success_text"]),
             )
+        if self.tone == "daisy":
+            return (
+                str(colors["daisy_soft"]),
+                str(colors["daisy_border"]),
+                str(colors["daisy_text"]),
+            )
         if self.tone == "warning":
             return (
                 str(colors["warning_soft"]),
@@ -2608,6 +2614,12 @@ class AuthOptionTab(QFrame):
                 str(colors["success_soft"]),
                 str(colors["success_border"]),
                 str(colors["success_text"]),
+            )
+        if self.tone == "daisy":
+            return (
+                str(colors["daisy_soft"]),
+                str(colors["daisy_border"]),
+                str(colors["daisy_text"]),
             )
         if self.tone == "warning":
             return (

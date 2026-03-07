@@ -46,6 +46,15 @@ jobs:
         run: |
           uv python install "${{ env.UV_PYTHON }}"
           uv tool install python-semantic-release
+          uv sync --python "${{ env.UV_PYTHON }}" --extra dev
+
+      - name: Run tests
+        run: |
+          uv run pytest -q
+
+      - name: Run type checks
+        run: |
+          uvx pyright
 
       - name: Configure git
         run: |
@@ -83,16 +92,29 @@ jobs:
 
       - name: Build plugin zip
         run: |
-          zip -r ida-chat.zip \
-            ida-plugin.json \
-            ida_chat_plugin.py \
-            ida_chat_core.py \
-            ida_chat_history.py \
-            ida_chat_support.py \
-            ida_chat_theme.py \
-            splash.png \
-            assets/fonts/ \
-            project/
+          python3 - <<'EOF'
+          from pathlib import Path
+          import zipfile
+
+          root = Path(".")
+          manifest = [
+              line.strip()
+              for line in (root / "release-manifest.txt").read_text(encoding="utf-8").splitlines()
+              if line.strip()
+          ]
+
+          with zipfile.ZipFile("ida-chat.zip", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+              for entry in manifest:
+                  path = root / entry
+                  if path.is_dir():
+                      for file_path in sorted(path.rglob("*")):
+                          if file_path.is_file():
+                              archive.write(file_path, file_path.as_posix())
+                  elif path.is_file():
+                      archive.write(path, path.as_posix())
+                  else:
+                      raise FileNotFoundError(f"Release manifest entry not found: {entry}")
+          EOF
 
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1

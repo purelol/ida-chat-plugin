@@ -39,6 +39,10 @@ VERCEL_THEME_TOKENS: Final[dict[str, dict[str, str]]] = {
         "success_subtle": "#ecfdf5",
         "success_border": "#a7f3d0",
         "success_text": "#047857",
+        "daisy": "#8b5cf6",
+        "daisy_subtle": "#f3e8ff",
+        "daisy_border": "#d8b4fe",
+        "daisy_text": "#6d28d9",
         "warning": "#f59e0b",
         "warning_subtle": "#fffbeb",
         "warning_border": "#fde68a",
@@ -87,6 +91,10 @@ VERCEL_THEME_TOKENS: Final[dict[str, dict[str, str]]] = {
         "success_subtle": "#052e24",
         "success_border": "#065f46",
         "success_text": "#6ee7b7",
+        "daisy": "#a78bfa",
+        "daisy_subtle": "#2e1065",
+        "daisy_border": "#7c3aed",
+        "daisy_text": "#ddd6fe",
         "warning": "#fbbf24",
         "warning_subtle": "#451a03",
         "warning_border": "#92400e",
@@ -131,6 +139,7 @@ def build_ui_colors(is_dark: bool) -> dict[str, object]:
     tokens = dict(VERCEL_THEME_TOKENS[mode])
     danger = tokens["destructive"]
     success = tokens["success"]
+    daisy = tokens["daisy"]
     warning = tokens["warning"]
 
     colors: dict[str, object] = {
@@ -184,6 +193,10 @@ def build_ui_colors(is_dark: bool) -> dict[str, object]:
         "success_soft": tokens["success_subtle"],
         "success_border": tokens["success_border"],
         "success_text": tokens["success_text"],
+        "daisy": daisy,
+        "daisy_soft": tokens["daisy_subtle"],
+        "daisy_border": tokens["daisy_border"],
+        "daisy_text": tokens["daisy_text"],
         "warning": warning,
         "warning_soft": tokens["warning_subtle"],
         "warning_border": tokens["warning_border"],
