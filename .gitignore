@@ -1,0 +1,33 @@
+# Build artifacts
+*.zip
+
+# IDA databases and temp files
+*.i64
+*.idb
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Bundled third-party code (ida-domain skill)
+work/
+
+# Local config
+CLAUDE.md
+agentio.json
+.DS_Store
+.venv
+.pytest_cache

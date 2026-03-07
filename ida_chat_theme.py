@@ -1,0 +1,199 @@
+"""Vercel-inspired theme tokens for the IDA Chat Qt UI."""
+
+from __future__ import annotations
+
+from typing import Final
+
+
+VERCEL_THEME_TOKENS: Final[dict[str, dict[str, str]]] = {
+    "light": {
+        "background": "#fafafa",
+        "foreground": "#0a0a0a",
+        "card": "#ffffff",
+        "card_foreground": "#0a0a0a",
+        "popover": "#ffffff",
+        "popover_foreground": "#0a0a0a",
+        "primary": "#0a0a0a",
+        "primary_foreground": "#ffffff",
+        "primary_hover": "#171717",
+        "secondary": "#ffffff",
+        "secondary_foreground": "#0a0a0a",
+        "secondary_hover": "#f5f5f5",
+        "muted": "#f5f5f5",
+        "muted_foreground": "#737373",
+        "subtle_foreground": "#a3a3a3",
+        "accent": "#0a0a0a",
+        "accent_foreground": "#ffffff",
+        "destructive": "#f43f5e",
+        "destructive_foreground": "#ffffff",
+        "destructive_hover": "#e11d48",
+        "destructive_subtle": "#fff1f2",
+        "destructive_border": "#fecdd3",
+        "destructive_text": "#9f1239",
+        "border": "#ebebeb",
+        "border_light": "#f3f3f3",
+        "input": "#ebebeb",
+        "ring": "#0a0a0a",
+        "link": "#1b6aff",
+        "success": "#10b981",
+        "success_subtle": "#ecfdf5",
+        "success_border": "#a7f3d0",
+        "success_text": "#047857",
+        "warning": "#f59e0b",
+        "warning_subtle": "#fffbeb",
+        "warning_border": "#fde68a",
+        "warning_text": "#b45309",
+        "info": "#1b6aff",
+        "info_subtle": "#eef4ff",
+        "info_border": "#c0d4ff",
+        "info_text": "#1b6aff",
+        "code_bg": "#fafafa",
+        "code_bg_alt": "#f5f5f5",
+        "code_text": "#0a0a0a",
+        "sidebar": "#ffffff",
+        "sidebar_foreground": "#0a0a0a",
+        "sidebar_border": "#ebebeb",
+    },
+    "dark": {
+        "background": "#0a0a0a",
+        "foreground": "#ededed",
+        "card": "#111111",
+        "card_foreground": "#ededed",
+        "popover": "#121212",
+        "popover_foreground": "#ededed",
+        "primary": "#ededed",
+        "primary_foreground": "#000000",
+        "primary_hover": "#d4d4d4",
+        "secondary": "#111111",
+        "secondary_foreground": "#ededed",
+        "secondary_hover": "#1a1a1a",
+        "muted": "#171717",
+        "muted_foreground": "#737373",
+        "subtle_foreground": "#525252",
+        "accent": "#ededed",
+        "accent_foreground": "#0a0a0a",
+        "destructive": "#f43f5e",
+        "destructive_foreground": "#ffffff",
+        "destructive_hover": "#fb7185",
+        "destructive_subtle": "#3a0b19",
+        "destructive_border": "#9f1239",
+        "destructive_text": "#fda4af",
+        "border": "#222222",
+        "border_light": "#1a1a1a",
+        "input": "#171717",
+        "ring": "#ededed",
+        "link": "#5b9aff",
+        "success": "#10b981",
+        "success_subtle": "#052e24",
+        "success_border": "#065f46",
+        "success_text": "#6ee7b7",
+        "warning": "#fbbf24",
+        "warning_subtle": "#451a03",
+        "warning_border": "#92400e",
+        "warning_text": "#fbbf24",
+        "info": "#1b6aff",
+        "info_subtle": "#0b1f4f",
+        "info_border": "#1d4ed8",
+        "info_text": "#93c5fd",
+        "code_bg": "#090909",
+        "code_bg_alt": "#121212",
+        "code_text": "#ededed",
+        "sidebar": "#121212",
+        "sidebar_foreground": "#ededed",
+        "sidebar_border": "#1c1c1c",
+    },
+}
+
+THEME_METRICS: Final[dict[str, int]] = {
+    "radius_xs": 6,
+    "radius_sm": 8,
+    "radius_md": 10,
+    "radius_lg": 12,
+    "radius_xl": 16,
+}
+
+
+def _mix_hex(first: str, second: str, ratio: float) -> str:
+    """Return a hex color blended between two hex inputs."""
+    ratio = max(0.0, min(1.0, ratio))
+    start = tuple(int(first[index:index + 2], 16) for index in (1, 3, 5))
+    end = tuple(int(second[index:index + 2], 16) for index in (1, 3, 5))
+    mixed = [
+        round(start[channel] * (1.0 - ratio) + end[channel] * ratio)
+        for channel in range(3)
+    ]
+    return "#{:02x}{:02x}{:02x}".format(*mixed)
+
+
+def build_ui_colors(is_dark: bool) -> dict[str, object]:
+    """Map raw theme tokens to the semantic color keys used by the plugin."""
+    mode = "dark" if is_dark else "light"
+    tokens = dict(VERCEL_THEME_TOKENS[mode])
+    danger = tokens["destructive"]
+    success = tokens["success"]
+    warning = tokens["warning"]
+
+    colors: dict[str, object] = {
+        "mode": mode,
+        "is_dark": is_dark,
+        "window": tokens["background"],
+        "window_text": tokens["foreground"],
+        "base": tokens["card"],
+        "alt_base": tokens["muted"],
+        "text": tokens["foreground"],
+        "button": tokens["secondary"],
+        "button_text": tokens["secondary_foreground"],
+        "highlight": tokens["primary"],
+        "highlight_text": tokens["primary_foreground"],
+        "mid": tokens["border"],
+        "dark": "#171717" if not is_dark else "#090909",
+        "light": "#ffffff" if not is_dark else "#1d1d1d",
+        "app_bg": tokens["background"],
+        "header_bg": tokens["popover"],
+        "sidebar_bg": tokens["sidebar"],
+        "surface": tokens["card"],
+        "surface_alt": tokens["muted"],
+        "surface_elevated": tokens["secondary"],
+        "surface_hover": tokens["secondary_hover"],
+        "accent": tokens["primary"],
+        "accent_soft": tokens["muted"],
+        "accent_hover": tokens["primary_hover"],
+        "accent_text": tokens["primary_foreground"],
+        "ring": tokens["ring"],
+        "link": tokens["link"],
+        "info": tokens["info"],
+        "info_soft": tokens["info_subtle"],
+        "info_border": tokens["info_border"],
+        "info_text": tokens["info_text"],
+        "text_muted": tokens["muted_foreground"],
+        "text_subtle": tokens["subtle_foreground"],
+        "border": tokens["border"],
+        "border_light": tokens["border_light"],
+        "border_strong": tokens["border"],
+        "divider": tokens["sidebar_border"],
+        "user_bubble": tokens["primary"],
+        "user_bubble_text": tokens["primary_foreground"],
+        "assistant_bubble": tokens["card"],
+        "assistant_border": tokens["border"],
+        "tool_bubble": tokens["info_subtle"],
+        "code_bg": tokens["code_bg"],
+        "code_bg_alt": tokens["code_bg_alt"],
+        "code_border": tokens["border"],
+        "code_text": tokens["code_text"],
+        "success": success,
+        "success_soft": tokens["success_subtle"],
+        "success_border": tokens["success_border"],
+        "success_text": tokens["success_text"],
+        "warning": warning,
+        "warning_soft": tokens["warning_subtle"],
+        "warning_border": tokens["warning_border"],
+        "warning_text": tokens["warning_text"],
+        "danger": danger,
+        "danger_hover": tokens["destructive_hover"],
+        "danger_soft": tokens["destructive_subtle"],
+        "danger_border": tokens["destructive_border"],
+        "danger_text": tokens["destructive_text"],
+        "danger_foreground": tokens["destructive_foreground"],
+    }
+    colors.update(THEME_METRICS)
+    return colors

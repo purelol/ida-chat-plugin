@@ -1,0 +1,105 @@
+name: Release
+
+run-name: "Release ${{ github.event.inputs.release_type }} bump"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Release type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: "patch"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  UV_PYTHON: "3.13"
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python with uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: |
+          uv python install "${{ env.UV_PYTHON }}"
+          uv tool install python-semantic-release
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version and generate changelog
+        id: version
+        run: |
+          semantic-release version --${{ github.event.inputs.release_type }}
+
+          VERSION=$(semantic-release version --print-last-released | tail -1)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "Bumped to: ${VERSION}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract release notes
+        run: |
+          python3 - <<'EOF'
+          import re, os
+          version = os.environ["VERSION"]
+          try:
+              content = open("CHANGELOG.md").read()
+              pattern = rf"## .*?{re.escape(version)}.*?\n(.*?)(?=\n## |\Z)"
+              m = re.search(pattern, content, re.DOTALL)
+              notes = m.group(1).strip() if m else ""
+          except FileNotFoundError:
+              notes = ""
+          open("release_notes.md", "w").write(notes or "See commit history for full changes.")
+          EOF
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Build plugin zip
+        run: |
+          zip -r ida-chat.zip \
+            ida-plugin.json \
+            ida_chat_plugin.py \
+            ida_chat_core.py \
+            ida_chat_history.py \
+            ida_chat_support.py \
+            ida_chat_theme.py \
+            splash.png \
+            assets/fonts/ \
+            project/
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          tag: ${{ steps.version.outputs.tag }}
+          makeLatest: true
+          bodyFile: release_notes.md
+          artifacts: ida-chat.zip

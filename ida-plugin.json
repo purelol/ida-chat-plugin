@@ -1,0 +1,89 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "ida-chat",
+    "entryPoint": "ida_chat_plugin.py",
+    "version": "0.2.6",
+    "idaVersions": ["9.0", "9.1", "9.2", "9.3"],
+    "description": "LLM Chat Client for IDA Pro - A dockable chat interface for AI-powered reverse engineering assistance using Claude Agent SDK.",
+    "license": "MIT",
+    "categories": ["collaboration-and-productivity", "ui-ux-and-visualization"],
+    "pythonDependencies": [
+      "claude-agent-sdk",
+      "ida-domain",
+      "ida-settings",
+      "claude-code-transcripts"
+    ],
+    "urls": {
+      "repository": "https://github.com/tanu360/ida-chat-plugin"
+    },
+    "authors": [{
+      "name": "Hex-Rays",
+      "email": "support@hex-rays.com"
+    }],
+    "maintainers": [{
+      "name": "Pierre-Alexandre Losson",
+      "email": "palosson@hex-rays.com"
+    }],
+    "settings": [
+      {
+        "key": "show_wizard",
+        "name": "Show Setup Wizard",
+        "type": "boolean",
+        "description": "Show the setup wizard on plugin launch",
+        "default": true,
+        "required": false,
+        "prompt": false
+      },
+      {
+        "key": "auth_type",
+        "name": "Authentication Type",
+        "type": "string",
+        "description": "Authentication type: 'system', 'oauth', or 'api_key'",
+        "required": false
+      },
+      {
+        "key": "api_key",
+        "name": "API Key",
+        "type": "string",
+        "description": "API key or OAuth token (not needed for 'system' auth type)",
+        "sensitive": true,
+        "required": false
+      },
+      {
+        "key": "require_script_approval",
+        "name": "Ask before running generated scripts",
+        "type": "boolean",
+        "description": "Show a preview and ask for approval before executing any AI-generated IDA script",
+        "default": false,
+        "required": false,
+        "prompt": false
+      },
+      {
+        "key": "auto_context",
+        "name": "Automatic Context",
+        "type": "boolean",
+        "description": "Attach the current cursor, selection, and line context automatically",
+        "default": true,
+        "required": false,
+        "prompt": false
+      },
+      {
+        "key": "model_profile",
+        "name": "Model Profile",
+        "type": "string",
+        "description": "Claude model profile to use (e.g. 'claude-sonnet-4-5', 'claude-opus-4-5')",
+        "required": false
+      },
+      {
+        "key": "redact_export_paths",
+        "name": "Redact Export Paths",
+        "type": "boolean",
+        "description": "Redact local absolute paths from exported transcripts",
+        "default": true,
+        "required": false,
+        "prompt": false
+      }
+    ]
+  }
+}
