@@ -12,7 +12,10 @@ dependencies = [
     "claude-agent-sdk",
     "ida-domain",
     "ida-settings>=3.3.0",
-    "claude-code-transcripts",
+    "beautifulsoup4>=4.12.3",
+    "linkify-it-py>=2.0.3",
+    "markdown-it-py>=3.0.0",
+    "Pygments>=2.18.0",
     "rich",
 ]
 
@@ -31,10 +34,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["."]
-only-include = ["ida_chat_cli.py", "ida_chat_core.py", "ida_chat_export.py", "ida_chat_history.py", "ida_chat_support.py", "project"]
+only-include = ["assets", "ida-plugin.json", "ida_chat_bootstrap.py", "ida_chat_cli.py", "ida_chat_core.py", "ida_chat_export.py", "ida_chat_history.py", "ida_chat_markdown.py", "ida_chat_plugin.py", "ida_chat_runtime_setup.py", "ida_chat_support.py", "ida_chat_theme.py", "project", "requirements.txt"]
 
 [project.optional-dependencies]
 dev = [
+    "PySide6>=6.8.0",
     "pytest>=8.3.0",
     "taskipy>=1.14.1",
     "python-semantic-release>=10.3.1",

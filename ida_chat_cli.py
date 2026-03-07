@@ -16,12 +16,16 @@ import webbrowser
 from pathlib import Path
 from typing import Any, cast
 
+# Ensure local modules are importable
+sys.path.insert(0, str(Path(__file__).parent.resolve()))
+
+from ida_chat_bootstrap import bootstrap_runtime_dependencies
+
+bootstrap_runtime_dependencies()
+
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.syntax import Syntax
-
-# Ensure local modules are importable
-sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
 # Import local module first (before ida_domain which may modify sys.path)
 from ida_chat_core import IDAChatCore, ChatCallback

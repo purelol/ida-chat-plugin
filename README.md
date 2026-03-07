@@ -99,6 +99,23 @@ hcli plugin install https://github.com/tanu360/ida-chat-plugin
 
 On first launch, a setup wizard will guide you through choosing an authentication method and model.
 
+### Source Checkout Setup
+
+If you are running the plugin directly from this repository inside `~/.idapro/plugins/ida-chat`, set up the project environment first:
+
+```bash
+uv sync --extra dev
+```
+
+IDA uses its own embedded Python, so the plugin explicitly loads dependencies from this repo's `.venv` when opened from source. If you do not use `uv`, create the virtualenv manually:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+The runtime dependencies used by the markdown/chat UI live in [requirements.txt](requirements.txt).
+
 ---
 
 <a id="usage"></a>

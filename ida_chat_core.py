@@ -27,11 +27,18 @@ from claude_agent_sdk import (
     TextBlock,
     ToolUseBlock,
 )
-from claude_agent_sdk.types import HookContext, HookInput, HookJSONOutput, PreToolUseHookInput, SdkBeta
+from claude_agent_sdk.types import (
+    HookContext,
+    HookInput,
+    HookJSONOutput,
+    PreToolUseHookInput,
+    SdkBeta,
+)
 from ida_chat_export import render_transcript_html
 from ida_chat_support import (
     ConnectionTestResult,
     DiagnosticReport,
+    FailurePhase,
     PromptContext,
     ScriptApprovalRequest,
     ScriptDecision,
@@ -56,7 +63,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.FileHandler(LOG_FILE, mode="a", encoding="utf-8"),
-    ]
+    ],
 )
 logger = logging.getLogger("ida-chat")
 
@@ -179,14 +186,14 @@ async def _restrict_file_access(
     _context: HookContext,
 ) -> HookJSONOutput:
     """Hook to block file operations outside PROJECT_DIR."""
-    if input_data['hook_event_name'] != 'PreToolUse':
+    if input_data["hook_event_name"] != "PreToolUse":
         return {}
 
     pre_tool_input = cast(PreToolUseHookInput, input_data)
-    tool_input = pre_tool_input['tool_input']
+    tool_input = pre_tool_input["tool_input"]
 
     # Get the path being accessed (different tools use different param names)
-    file_path = tool_input.get('file_path') or tool_input.get('path') or ''
+    file_path = tool_input.get("file_path") or tool_input.get("path") or ""
 
     if file_path:
         # Resolve to absolute path
@@ -199,10 +206,10 @@ async def _restrict_file_access(
             # Path is outside PROJECT_DIR
             logger.warning(f"Blocked file access outside PROJECT_DIR: {file_path}")
             return {
-                'hookSpecificOutput': {
-                    'hookEventName': pre_tool_input['hook_event_name'],
-                    'permissionDecision': 'deny',
-                    'permissionDecisionReason': 'File access restricted to project directory'
+                "hookSpecificOutput": {
+                    "hookEventName": pre_tool_input["hook_event_name"],
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": "File access restricted to project directory",
                 }
             }
 
@@ -219,7 +226,9 @@ def _prepare_transcript_source(
         return session_file
 
     redaction_map = build_redaction_map(binary_path)
-    redacted_text = redact_text_paths(session_file.read_text(encoding="utf-8"), redaction_map)
+    redacted_text = redact_text_paths(
+        session_file.read_text(encoding="utf-8"), redaction_map
+    )
     tmp_file = Path(cast(str, tempfile.mkdtemp())) / session_file.name
     tmp_file.write_text(redacted_text, encoding="utf-8")
     return tmp_file
@@ -276,7 +285,9 @@ def export_transcript(
     output_dir.mkdir(parents=True, exist_ok=True)
     _clear_generated_transcript_files(output_dir)
 
-    with _prepared_transcript_source(session_file, redact_paths, binary_path) as source_session:
+    with _prepared_transcript_source(
+        session_file, redact_paths, binary_path
+    ) as source_session:
         html_output = render_transcript_html(
             source_session,
             metadata_file=session_file,
@@ -363,7 +374,9 @@ async def test_claude_connection(
 
         # Verify pong is present — any error/auth message will never contain it.
         if "pong" not in response_text.lower():
-            short = normalize_error_message(response_text.strip() or "No response received.")
+            short = normalize_error_message(
+                response_text.strip() or "No response received."
+            )
             cli_path, version_output = _probe_claude_version()
             diagnostics = DiagnosticReport(
                 phase="test",
@@ -454,7 +467,8 @@ class IDAChatCore:
         db,
         callback: ChatCallback,
         script_executor: Callable[[str], str] | None = None,
-        script_approver: Callable[[ScriptApprovalRequest], Awaitable[ScriptDecision]] | None = None,
+        script_approver: Callable[[ScriptApprovalRequest], Awaitable[ScriptDecision]]
+        | None = None,
         verbose: bool = False,
         max_turns: int = 20,
         history: "MessageHistory | None" = None,
@@ -503,12 +517,14 @@ class IDAChatCore:
         self._stderr_tail.append(line)
         logger.debug(f"[claude stderr] {line}")
 
-    def _build_diagnostics(self, phase: str, error: Exception | str) -> DiagnosticReport:
+    def _build_diagnostics(
+        self, phase: FailurePhase, error: Exception | str
+    ) -> DiagnosticReport:
         """Create a normalized diagnostics payload from an exception."""
         cli_path, version_output = _probe_claude_version()
         raw_error = str(error)
         diagnostics = DiagnosticReport(
-            phase=phase,  # type: ignore[arg-type]
+            phase=phase,
             short_message=normalize_error_message(raw_error),
             raw_error=raw_error,
             cli_path=cli_path,
@@ -553,8 +569,8 @@ class IDAChatCore:
                 "append": _load_system_prompt(),
             },
             hooks={
-                'PreToolUse': [
-                    HookMatcher(matcher='Read|Glob|Grep', hooks=[_restrict_file_access])
+                "PreToolUse": [
+                    HookMatcher(matcher="Read|Glob|Grep", hooks=[_restrict_file_access])
                 ]
             },
         )
@@ -564,7 +580,9 @@ class IDAChatCore:
             await self.client.connect()
             logger.info("Connected successfully")
         except Exception as error:
-            raise IDAChatRuntimeError(self._build_diagnostics("connect", error)) from error
+            raise IDAChatRuntimeError(
+                self._build_diagnostics("connect", error)
+            ) from error
 
     async def disconnect(self) -> None:
         """Disconnect the Agent SDK client."""
@@ -572,7 +590,9 @@ class IDAChatCore:
             try:
                 await self.client.disconnect()
             except Exception as error:
-                raise IDAChatRuntimeError(self._build_diagnostics("disconnect", error)) from error
+                raise IDAChatRuntimeError(
+                    self._build_diagnostics("disconnect", error)
+                ) from error
             self.client = None
 
     async def interrupt(self) -> None:
@@ -584,7 +604,9 @@ class IDAChatCore:
             await self.client.interrupt()
         except Exception as error:
             logger.warning(f"Interrupt failed: {error}")
-            raise IDAChatRuntimeError(self._build_diagnostics("query", error)) from error
+            raise IDAChatRuntimeError(
+                self._build_diagnostics("query", error)
+            ) from error
 
     def _default_execute_script(self, code: str) -> str:
         """Default script executor - direct execution.
@@ -645,7 +667,9 @@ class IDAChatCore:
                         # Extract tool details based on tool type
                         details = summarize_tool_use(
                             block.name,
-                            block.input if isinstance(block.input, dict) else {"input": str(block.input)},
+                            block.input
+                            if isinstance(block.input, dict)
+                            else {"input": str(block.input)},
                         )
                         self.callback.on_tool_use(block.name, details)
 
@@ -653,12 +677,16 @@ class IDAChatCore:
                         if self.history:
                             self.history.append_tool_use(
                                 block.name,
-                                block.input if isinstance(block.input, dict) else {"input": str(block.input)}
+                                block.input
+                                if isinstance(block.input, dict)
+                                else {"input": str(block.input)},
                             )
 
                     elif isinstance(block, TextBlock):
                         text = block.text
-                        logger.debug(f"  TextBlock ({len(text)} chars): {text[:100]}...")
+                        logger.debug(
+                            f"  TextBlock ({len(text)} chars): {text[:100]}..."
+                        )
                         full_text.append(text)
 
                         # Output text excluding <idascript> blocks
@@ -675,7 +703,9 @@ class IDAChatCore:
                         logger.warning(f"  Unknown block type: {type(block).__name__}")
 
             elif isinstance(message, ResultMessage):
-                logger.info(f"ResultMessage: turns={message.num_turns}, cost={message.total_cost_usd}")
+                logger.info(
+                    f"ResultMessage: turns={message.num_turns}, cost={message.total_cost_usd}"
+                )
 
                 # Extract scripts from the response
                 if full_text:
@@ -695,7 +725,7 @@ class IDAChatCore:
                             preview=format_script_preview(code),
                             requires_approval=self.require_script_approval,
                         )
-                        logger.debug(f"Script {j+1}:\n{code}")
+                        logger.debug(f"Script {j + 1}:\n{code}")
                         decision = await self._decide_script(request)
 
                         if decision == "cancel":
@@ -708,11 +738,13 @@ class IDAChatCore:
                             script_outputs.append(output)
                             self.callback.on_script_output(output)
                             if self.history:
-                                self.history.append_script_execution(code, output, is_error=False)
+                                self.history.append_script_execution(
+                                    code, output, is_error=False
+                                )
                             continue
 
                         output = self._execute_script(code)
-                        logger.debug(f"Script {j+1} output:\n{output}")
+                        logger.debug(f"Script {j + 1} output:\n{output}")
                         script_outputs.append(output)
                         if output:
                             self.callback.on_script_output(output)
@@ -787,7 +819,9 @@ class IDAChatCore:
             except IDAChatRuntimeError:
                 raise
             except Exception as error:
-                raise IDAChatRuntimeError(self._build_diagnostics("query", error)) from error
+                raise IDAChatRuntimeError(
+                    self._build_diagnostics("query", error)
+                ) from error
             all_script_outputs.extend(script_outputs)
 
             if not scripts_found:

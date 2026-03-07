@@ -14,6 +14,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal, MutableMapping
 
+from ida_chat_markdown import merge_markdown_fragments
+
 
 FailurePhase = Literal["test", "connect", "query", "disconnect"]
 RunOutcome = Literal["success", "error", "cancelled"]
@@ -145,7 +147,7 @@ def auth_mode_has_credentials(
     `system` relies on existing machine-level configuration, so the UI cannot
     pre-validate it beyond letting the runtime attempt a connection test.
     `oauth` supports either Claude Code's local browser login or a pasted
-    fallback token. `api_key` requires a non-empty key.
+    token. `api_key` requires a non-empty key.
     """
     secret = (credential or "").strip()
     if auth_type == "api_key":
@@ -418,12 +420,15 @@ def normalize_session_entries(entries: list[dict[str, Any]]) -> list[dict[str, A
                 continue
             block_type = block.get("type")
             if block_type == "text":
-                items.append(
-                    {
-                        "kind": "user" if entry_type == "user" else "assistant",
-                        "text": block.get("text", ""),
-                    }
-                )
+                kind = "user" if entry_type == "user" else "assistant"
+                text = str(block.get("text", ""))
+                if items and items[-1].get("kind") == kind and kind == "assistant":
+                    items[-1]["text"] = merge_markdown_fragments(
+                        str(items[-1].get("text", "")),
+                        text,
+                    )
+                else:
+                    items.append({"kind": kind, "text": text})
             elif block_type == "tool_use":
                 tool_name = block.get("name", "")
                 tool_id = block.get("id", "")

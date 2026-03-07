@@ -12,7 +12,10 @@
       "claude-agent-sdk",
       "ida-domain",
       "ida-settings",
-      "claude-code-transcripts"
+      "beautifulsoup4",
+      "markdown-it-py",
+      "linkify-it-py",
+      "Pygments"
     ],
     "urls": {
       "repository": "https://github.com/tanu360/ida-chat-plugin"

@@ -6,14 +6,13 @@ from datetime import datetime
 import html
 import json
 from pathlib import Path
-import re
 from typing import Any
 
+from ida_chat_markdown import build_web_syntax_css, render_web_markdown
 from ida_chat_support import normalize_session_entries
 from ida_chat_theme import build_ui_colors
 
 _COLLAPSE_THRESHOLD = 10
-_CODE_BLOCK_RE = re.compile(r"```([\w+-]*)\n?(.*?)```", re.DOTALL)
 
 
 def _load_entries(session_file: Path) -> list[dict[str, Any]]:
@@ -118,102 +117,8 @@ def _risk_chip_class(risk: object) -> str:
     return "warning"
 
 
-def _stash_code_block(code_blocks: list[str], match: re.Match[str]) -> str:
-    language = html.escape(match.group(1) or "code")
-    code = html.escape(match.group(2).strip("\n"))
-    placeholder = f"\x00CODE{len(code_blocks)}\x00"
-    header = (
-        f'<div class="md-code-header"><span>Code</span><span>{language}</span></div>'
-        if language and language != "code"
-        else '<div class="md-code-header"><span>Code</span></div>'
-    )
-    code_blocks.append(
-        f'<div class="md-code-wrap">{header}<pre class="md-code"><code>{code}</code></pre></div>'
-    )
-    return placeholder
-
-
 def _markdown_to_html(text: str) -> str:
-    code_blocks: list[str] = []
-    transformed = _CODE_BLOCK_RE.sub(
-        lambda match: _stash_code_block(code_blocks, match), text or ""
-    )
-    transformed = html.escape(transformed)
-
-    transformed = re.sub(
-        r"`([^`]+)`",
-        r'<code class="md-inline">\1</code>',
-        transformed,
-    )
-    transformed = re.sub(
-        r"^### (.+)$",
-        r'<h3 class="md-h3">\1</h3>',
-        transformed,
-        flags=re.MULTILINE,
-    )
-    transformed = re.sub(
-        r"^## (.+)$",
-        r'<h2 class="md-h2">\1</h2>',
-        transformed,
-        flags=re.MULTILINE,
-    )
-    transformed = re.sub(
-        r"^# (.+)$",
-        r'<h1 class="md-h1">\1</h1>',
-        transformed,
-        flags=re.MULTILINE,
-    )
-    transformed = re.sub(r"\*\*\*(.+?)\*\*\*", r"<strong><em>\1</em></strong>", transformed)
-    transformed = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", transformed)
-    transformed = re.sub(r"__(.+?)__", r"<strong>\1</strong>", transformed)
-    transformed = re.sub(r"(?<!\w)\*([^*\n]+)\*(?!\w)", r"<em>\1</em>", transformed)
-    transformed = re.sub(r"(?<!\w)_([^_\n]+)_(?!\w)", r"<em>\1</em>", transformed)
-    transformed = re.sub(r"~~(.+?)~~", r"<s>\1</s>", transformed)
-    transformed = re.sub(
-        r"\[([^\]]+)\]\(([^)]+)\)",
-        r'<a class="md-link" href="\2">\1</a>',
-        transformed,
-    )
-
-    def replace_list_block(match: re.Match[str]) -> str:
-        items = re.sub(
-            r"^[ \t]*[-*] (.+)$",
-            r"<li>\1</li>",
-            match.group(0),
-            flags=re.MULTILINE,
-        )
-        return f'<ul class="md-list">{items}</ul>'
-
-    transformed = re.sub(
-        r"(?:^[ \t]*[-*] .+\n?)+",
-        replace_list_block,
-        transformed,
-        flags=re.MULTILINE,
-    )
-
-    def replace_ordered_list(match: re.Match[str]) -> str:
-        items = re.sub(
-            r"^\d+\. (.+)$",
-            r"<li>\1</li>",
-            match.group(0),
-            flags=re.MULTILINE,
-        )
-        return f'<ol class="md-list md-list-ordered">{items}</ol>'
-
-    transformed = re.sub(
-        r"(?:^\d+\. .+\n?)+",
-        replace_ordered_list,
-        transformed,
-        flags=re.MULTILINE,
-    )
-    transformed = re.sub(r"^---+$", '<hr class="md-rule">', transformed, flags=re.MULTILINE)
-    transformed = re.sub(r"\n{2,}", "<br><br>", transformed)
-    transformed = transformed.replace("\n", "<br>")
-
-    for index, block in enumerate(code_blocks):
-        transformed = transformed.replace(f"\x00CODE{index}\x00", block)
-
-    return transformed
+    return render_web_markdown(text)
 
 
 def _code_block_html(text: str, title: str) -> str:
@@ -415,6 +320,10 @@ def render_transcript_html(
     html[data-theme="dark"] {{
 {_theme_vars(dark)}
     }}
+
+{build_web_syntax_css("light")}
+
+{build_web_syntax_css("dark")}
 
     * {{
       box-sizing: border-box;
@@ -787,56 +696,92 @@ def render_transcript_html(
     .code-block,
     .md-code {{
       margin: 0;
-      padding: 15px 16px 16px;
+      padding: 16px 18px;
       background: var(--code-bg);
       color: var(--code-text);
       font-family: "Geist Mono", "SFMono-Regular", "Consolas", monospace;
       font-size: 12px;
       line-height: 1.65;
-      white-space: pre-wrap;
-      word-break: break-word;
+      white-space: pre;
+      word-break: normal;
       overflow-x: auto;
+      tab-size: 2;
     }}
 
     .md-code-wrap {{
-      margin: 8px 0;
+      margin: 12px 0;
       border: 1px solid var(--code-border);
-      border-radius: 16px;
+      border-radius: 18px;
       overflow: hidden;
       background: var(--code-bg);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
     }}
 
     .md-code-header {{
       display: flex;
       justify-content: space-between;
       gap: 12px;
-      padding: 10px 14px;
+      padding: 11px 14px;
       border-bottom: 1px solid var(--code-border);
       background: var(--code-bg-alt);
       color: var(--text-subtle);
       font-size: 11px;
+      font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
+    }}
+
+    .md-code-content {{
+      display: block;
+      min-width: max-content;
     }}
 
     .md-inline {{
       background: var(--code-bg-alt);
       color: var(--code-text);
       border: 1px solid var(--code-border);
-      border-radius: var(--radius-xs);
-      padding: 2px 6px;
+      border-radius: 999px;
+      padding: 3px 8px;
       font-family: "Geist Mono", "SFMono-Regular", "Consolas", monospace;
       font-size: 0.92em;
     }}
 
+    .md-inline-api {{
+      background: transparent;
+      color: var(--info-text);
+      border: none;
+      padding: 0;
+    }}
+
     .md-link {{
       color: var(--link);
-      text-decoration: underline;
+      text-decoration: none;
+    }}
+
+    .md-link:hover {{
+      color: var(--accent);
     }}
 
     .md-list {{
-      margin: 8px 0;
-      padding-left: 20px;
+      margin: 10px 0 12px;
+      padding-left: 22px;
+    }}
+
+    .md-list li {{
+      padding-left: 4px;
+    }}
+
+    .md-list li + li {{
+      margin-top: 6px;
+    }}
+
+    .md-list li::marker {{
+      color: var(--text-muted);
+      font-weight: 700;
+    }}
+
+    .md-p {{
+      margin: 0 0 10px;
     }}
 
     .md-rule {{
@@ -863,6 +808,67 @@ def render_transcript_html(
 
     .md-h3 {{
       font-size: 15px;
+    }}
+
+    .md-quote {{
+      margin: 10px 0;
+      padding: 9px 14px;
+      border: 1px solid var(--border-light);
+      border-radius: 18px;
+      background: var(--surface-alt);
+      color: var(--text-muted);
+    }}
+
+    .md-quote .md-p {{
+      margin: 0;
+    }}
+
+    .md-quote .md-p + .md-p {{
+      margin-top: 6px;
+    }}
+
+    .md-api-heading {{
+      margin: 8px 0;
+      color: var(--info-text);
+      font-size: 14px;
+      font-weight: 400;
+      font-family: "Geist Mono", "SFMono-Regular", "Consolas", monospace;
+    }}
+
+    .md-table {{
+      width: 100%;
+      margin: 12px 0;
+      border-collapse: collapse;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }}
+
+    .md-th,
+    .md-td {{
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }}
+
+    .md-th {{
+      background: var(--surface-alt);
+      font-weight: 600;
+    }}
+
+    .md-task-list {{
+      list-style: none;
+      padding-left: 0;
+    }}
+
+    .task-list-item {{
+      list-style: none;
+      margin-left: 0;
+    }}
+
+    .task-list-item input {{
+      margin-right: 8px;
     }}
 
     .transcript-disclosure {{

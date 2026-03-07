@@ -5,25 +5,18 @@ A dockable chat interface powered by Claude Agent SDK for
 AI-assisted reverse engineering within IDA Pro.
 """
 
-# pyright: reportMissingModuleSource=false
-
 import asyncio
 import html
+import importlib
 import os
-import re
 import subprocess
 import sys
 from datetime import datetime
 from io import StringIO
-
-# Signal to core that we're running inside IDA Pro (enables UI interaction API)
-os.environ["IDA_CHAT_INSIDE_IDA"] = "1"
 from pathlib import Path
-from typing import Any, Callable, TypedDict, cast
+from typing import Any, Callable, Protocol, TypedDict, cast
 
-import ida_idaapi
-import ida_kernwin
-import ida_lines
+from ida_chat_runtime_setup import ROOT_DIR as _RUNTIME_ROOT
 import ida_settings
 from ida_domain import Database
 from PySide6.QtWidgets import (
@@ -47,12 +40,10 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QDialog,
     QSplitter,
+    QTextBrowser,
 )
 from PySide6.QtCore import Qt, Signal, QThread, QObject, QTimer
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QKeyEvent, QPalette, QPixmap
-
-# Ensure local modules are importable
-sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
 from ida_chat_core import (
     IDAChatCore,
@@ -62,6 +53,7 @@ from ida_chat_core import (
     export_transcript,
 )
 from ida_chat_history import MessageHistory
+from ida_chat_markdown import merge_markdown_fragments, render_qt_markdown
 from ida_chat_support import (
     apply_auth_environment,
     build_progress_timeline_steps,
@@ -81,6 +73,50 @@ from ida_chat_support import (
 from ida_chat_theme import build_ui_colors
 
 
+class _IdaIdaapiModule(Protocol):
+    BADADDR: int
+    PLUGIN_KEEP: int
+    PLUGIN_SKIP: int
+    plugin_t: type[Any]
+
+
+class _IdaKernwinModule(Protocol):
+    AST_ENABLE_ALWAYS: int
+    DP_RIGHT: int
+    DP_SZHINT: int
+    MFF_FAST: int
+    SETMENU_APP: int
+    PluginForm: type[Any]
+    action_handler_t: type[Any]
+    action_desc_t: type[Any]
+
+    def attach_action_to_menu(
+        self, menu_path: str, action_name: str, flags: int
+    ) -> bool: ...
+    def close_widget(self, widget: Any, flags: int) -> None: ...
+    def detach_action_from_menu(self, menu_path: str, action_name: str) -> bool: ...
+    def execute_sync(self, callback: Callable[[], Any], flags: int) -> Any: ...
+    def find_widget(self, title: str) -> Any: ...
+    def get_curline(self) -> str | None: ...
+    def get_current_widget(self) -> Any: ...
+    def get_highlight(self, widget: Any) -> tuple[str, int] | None: ...
+    def get_screen_ea(self) -> int: ...
+    def msg(self, text: str) -> None: ...
+    def read_range_selection(self, view: Any) -> tuple[bool, int, int] | None: ...
+    def register_action(self, action_desc: Any) -> bool: ...
+    def set_dock_pos(self, src: str, dest: str, position: int) -> bool: ...
+    def unregister_action(self, action_name: str) -> bool: ...
+
+
+class _IdaLinesModule(Protocol):
+    def tag_remove(self, line: str) -> str: ...
+
+
+ida_idaapi = cast(_IdaIdaapiModule, importlib.import_module("ida_idaapi"))
+ida_kernwin = cast(_IdaKernwinModule, importlib.import_module("ida_kernwin"))
+ida_lines = cast(_IdaLinesModule, importlib.import_module("ida_lines"))
+
+
 # Plugin metadata
 PLUGIN_NAME = "IDA Chat"
 PLUGIN_COMMENT = "LLM Chat Client for IDA Pro"
@@ -93,7 +129,7 @@ ACTION_TOOLTIP = "Show or hide the IDA Chat panel"
 
 # Widget form title
 WIDGET_TITLE = "IDA Chat"
-FONT_DIR = Path(__file__).parent / "assets" / "fonts"
+FONT_DIR = _RUNTIME_ROOT / "assets" / "fonts"
 GEIST_SANS_FONT = FONT_DIR / "Geist-Variable.ttf"
 GEIST_MONO_FONT = FONT_DIR / "GeistMono-Variable.ttf"
 _ui_font_families: dict[str, str] | None = None
@@ -188,7 +224,7 @@ AUTH_OPTIONS: dict[str, dict[str, str]] = {
         "description": "Best for Pro, Max, Team, or Enterprise plans. It opens Claude Code's browser login flow on this machine.",
         "tone": "info",
         "breadcrumb": "Claude account",
-        "placeholder": "Optional fallback: paste the generated Claude OAuth token...",
+        "placeholder": "Optional: paste the generated Claude OAuth token...",
     },
     "api_key": {
         "tab": "API Key",
@@ -213,6 +249,13 @@ def _coerce_int(value: object, default: int = 0) -> int:
         return int(cast(int | float | str, value))
     except (TypeError, ValueError):
         return default
+
+
+def _coerce_str(value: object, default: str = "") -> str:
+    """Best-effort string coercion for loosely-typed settings/theme values."""
+    if value is None:
+        return default
+    return str(value)
 
 
 def _coerce_str_list(value: object) -> list[str]:
@@ -796,91 +839,107 @@ class CollapsibleSection(QFrame):
 
 
 def markdown_to_html(text: str) -> str:
-    """Convert markdown to HTML for display in QLabel with rich text."""
-    import html
+    """Convert markdown to an inline-styled HTML fragment for Qt rich text."""
+    return render_qt_markdown(text, get_ida_colors())
 
-    # Get theme-aware colors
-    colors = get_ida_colors()
-    code_bg = colors["code_bg"]
-    code_fg = colors["code_text"]
-    link_color = colors["link"]
 
-    # Extract fenced code blocks first to protect them from other transforms
-    code_blocks: list[str] = []
+class AutoSizingTextBrowser(QTextBrowser):
+    """Read-only rich text view that grows to fit its rendered document."""
 
-    def stash_code_block(match):
-        code = html.escape(match.group(2))
-        placeholder = f"\x00CODE{len(code_blocks)}\x00"
-        code_blocks.append(
-            f'<pre style="background-color: {code_bg}; color: {code_fg}; '
-            f'font-family: monospace; font-size: 11px; '
-            f"padding: 10px 12px; border-radius: {colors['radius_md']}px; "
-            f'margin: 6px 0; white-space: pre-wrap; word-break: break-all;">'
-            f"<code>{code}</code></pre>"
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setReadOnly(True)
+        self.setOpenExternalLinks(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setTextInteractionFlags(TEXT_SELECTABLE_LINK_FLAGS)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.document().setDocumentMargin(0)
+        self.setStyleSheet(
+            "QTextBrowser { background: transparent; border: none; padding: 0; }"
         )
-        return placeholder
 
-    text = re.sub(r"```(\w*)\n?(.*?)```", stash_code_block, text, flags=re.DOTALL)
+    def set_html_fragment(self, html_text: str) -> None:
+        """Replace the current rich text content and recompute height."""
+        self.setHtml(html_text)
+        self._sync_height()
 
-    # Escape remaining HTML
-    text = html.escape(text)
+    def _handle_resize_event(self, event):
+        super().resizeEvent(event)
+        self._sync_height()
 
-    # Inline code (`code`) — after escape so backtick content is safe
-    text = re.sub(
-        r"`([^`]+)`",
-        rf'<code style="background-color: {code_bg}; color: {code_fg}; '
-        rf'font-family: monospace; padding: 1px 5px; border-radius: {colors["radius_xs"]}px;">\1</code>',
-        text,
-    )
+    resizeEvent = _handle_resize_event
 
-    # Headers
-    text = re.sub(r"^### (.+)$", r'<b style="font-size: 13px;">\1</b>', text, flags=re.MULTILINE)
-    text = re.sub(r"^## (.+)$", r'<b style="font-size: 14px;">\1</b>', text, flags=re.MULTILINE)
-    text = re.sub(r"^# (.+)$", r'<b style="font-size: 16px;">\1</b>', text, flags=re.MULTILINE)
+    def _handle_show_event(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._sync_height)
 
-    # Bold and italic (must run before newline conversion)
-    text = re.sub(r"\*\*\*(.+?)\*\*\*", r"<b><i>\1</i></b>", text)
-    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
-    text = re.sub(r"__(.+?)__", r"<b>\1</b>", text)
-    text = re.sub(r"(?<!\w)\*([^*\n]+)\*(?!\w)", r"<i>\1</i>", text)
-    text = re.sub(r"(?<!\w)_([^_\n]+)_(?!\w)", r"<i>\1</i>", text)
+    showEvent = _handle_show_event
 
-    # Strikethrough
-    text = re.sub(r"~~(.+?)~~", r"<s>\1</s>", text)
+    def _sync_height(self) -> None:
+        viewport_width = max(self.viewport().width(), 0)
+        if viewport_width:
+            self.document().setTextWidth(viewport_width)
+        self.document().adjustSize()
+        height = int(self.document().size().height()) + 6
+        if height > 0:
+            self.setMinimumHeight(height)
+            self.setMaximumHeight(height)
 
-    # Links [text](url)
-    text = re.sub(
-        r"\[([^\]]+)\]\(([^)]+)\)",
-        rf'<a href="\2" style="color: {link_color}; text-decoration: underline;">\1</a>',
-        text,
-    )
 
-    # Bullet lists — gather consecutive items into <ul>
-    def replace_list_block(match):
-        items = re.sub(r"^[ \t]*[-*] (.+)$", r"<li>\1</li>", match.group(0), flags=re.MULTILINE)
-        return f"<ul style='margin: 4px 0; padding-left: 20px;'>{items}</ul>"
+class MarkdownBubble(QFrame):
+    """Shared chat bubble wrapper for markdown-rich user and assistant text."""
 
-    text = re.sub(r"(?:^[ \t]*[-*] .+\n?)+", replace_list_block, text, flags=re.MULTILINE)
+    def __init__(
+        self,
+        text: str,
+        *,
+        background: str,
+        border: str,
+        text_color: str,
+        max_width: int | None = None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self._raw_text = text
+        self._browser = AutoSizingTextBrowser(self)
+        self._text_color = text_color
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(0)
+        layout.addWidget(self._browser)
+        if max_width is not None:
+            self.setMaximumWidth(max_width)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.setStyleSheet(
+            f"""
+            QFrame {{
+                background-color: {background};
+                border: 1px solid {border};
+                border-radius: {get_ida_colors()["radius_lg"]}px;
+            }}
+            """
+        )
+        self._apply_markdown(text)
 
-    # Numbered lists
-    def replace_ol_block(match):
-        items = re.sub(r"^\d+\. (.+)$", r"<li>\1</li>", match.group(0), flags=re.MULTILINE)
-        return f"<ol style='margin: 4px 0; padding-left: 20px;'>{items}</ol>"
+    def set_markdown(self, text: str) -> None:
+        """Replace the markdown content."""
+        self._raw_text = text
+        self._apply_markdown(text)
 
-    text = re.sub(r"(?:^\d+\. .+\n?)+", replace_ol_block, text, flags=re.MULTILINE)
+    def append_markdown(self, text: str) -> None:
+        """Append another markdown fragment using streaming-friendly joins."""
+        self._raw_text = merge_markdown_fragments(self._raw_text, text)
+        self._apply_markdown(self._raw_text)
 
-    # Horizontal rule
-    text = re.sub(r"^---+$", "<hr/>", text, flags=re.MULTILINE)
-
-    # Paragraphs: blank lines → paragraph breaks
-    text = re.sub(r"\n{2,}", "<br><br>", text)
-    text = text.replace("\n", "<br>")
-
-    # Restore code blocks
-    for i, block in enumerate(code_blocks):
-        text = text.replace(f"\x00CODE{i}\x00", block)
-
-    return text
+    def _apply_markdown(self, text: str) -> None:
+        html_text = markdown_to_html(text)
+        wrapped = (
+            f'<div style="color: {self._text_color}; font-size: 13px; line-height: 1.65;">'
+            f"{html_text}</div>"
+        )
+        self._browser.set_html_fragment(wrapped)
 
 
 class MessageType:
@@ -1469,14 +1528,17 @@ class ProgressTimeline(QFrame):
         """)
 
         self._layout = QHBoxLayout(self)
-        self._layout.setContentsMargins(12, 8, 12, 8)
-        self._layout.setSpacing(6)
+        self._layout.setContentsMargins(10, 6, 10, 6)
+        self._layout.setSpacing(8)
 
-        self.timeline_label = QLabel("")
-        self.timeline_label.setStyleSheet(
-            f"color: {colors['text_muted']}; font-size: 11px;"
+        self.timeline_strip = QWidget()
+        self.timeline_strip.setSizePolicy(
+            QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed
         )
-        self._layout.addWidget(self.timeline_label)
+        self.timeline_strip_layout = QHBoxLayout(self.timeline_strip)
+        self.timeline_strip_layout.setContentsMargins(0, 0, 0, 0)
+        self.timeline_strip_layout.setSpacing(8)
+        self._layout.addWidget(self.timeline_strip)
         self._layout.addStretch()
 
         self.setVisible(False)
@@ -1510,27 +1572,71 @@ class ProgressTimeline(QFrame):
         """Hide the timeline."""
         self.setVisible(False)
 
-    def _update_display(self):
-        """Update the timeline display with compact summary."""
-        colors = get_ida_colors()
-        parts = []
+    def _clear_timeline_strip(self) -> None:
+        while self.timeline_strip_layout.count():
+            item = self.timeline_strip_layout.takeAt(0)
+            if item is None:
+                continue
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
 
-        for index, label, state in build_progress_timeline_steps(
+    def _update_display(self):
+        """Update the timeline display with compact step pills."""
+        colors = get_ida_colors()
+        self._clear_timeline_strip()
+
+        steps = build_progress_timeline_steps(
             self._script_count,
             self._current_stage,
             self._is_complete,
-        ):
-            color = (
-                colors["success_text"]
-                if state == "complete"
-                else colors["warning_text"]
+        )
+
+        for position, (index, label, state) in enumerate(steps):
+            if state == "complete":
+                pill_bg = colors["success_soft"]
+                pill_border = colors["success_border"]
+                pill_text = colors["success_text"]
+            elif state == "active":
+                pill_bg = colors["warning_soft"]
+                pill_border = colors["warning_border"]
+                pill_text = colors["warning_text"]
+            else:
+                pill_bg = colors["surface_alt"]
+                pill_border = colors["border_light"]
+                pill_text = colors["text_muted"]
+
+            pill = QLabel(f"{index}. {label}")
+            pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            pill.setFixedHeight(28)
+            pill.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+            pill.setStyleSheet(
+                f"""
+                QLabel {{
+                    background-color: {pill_bg};
+                    color: {pill_text};
+                    border: 1px solid {pill_border};
+                    border-radius: 14px;
+                    padding: 0 14px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }}
+                """
             )
-            weight = "600" if state != "complete" or index > 1 else "normal"
-            parts.append(
-                f"<span style='color: {color}; font-weight: {weight};'><b>{index}.</b> {html.escape(label)}</span>"
+            self.timeline_strip_layout.addWidget(
+                pill, 0, Qt.AlignmentFlag.AlignVCenter
             )
 
-        self.timeline_label.setText(" → ".join(parts))
+            if position == len(steps) - 1:
+                continue
+
+            separator = QLabel("→")
+            separator.setStyleSheet(
+                f"color: {colors['text_subtle']}; font-size: 11px; font-weight: 600;"
+            )
+            self.timeline_strip_layout.addWidget(
+                separator, 0, Qt.AlignmentFlag.AlignVCenter
+            )
 
 
 class ChatMessage(QFrame):
@@ -1551,7 +1657,7 @@ class ChatMessage(QFrame):
         self._blink_visible = True
         self._blink_timer: QTimer | None = None
         self._status_indicator: QLabel | None = None
-        self.message_widget: QLabel | CodeBlock
+        self.message_widget: QWidget
         self._raw_text = text
         self._setup_ui(text)
 
@@ -1566,35 +1672,28 @@ class ChatMessage(QFrame):
 
         if self.is_user:
             # User message - right aligned, bubble style
-            self.message_widget = QLabel(text)
-            self.message_widget.setWordWrap(True)
-            self.message_widget.setTextInteractionFlags(TEXT_SELECTABLE_FLAGS)
+            self.message_widget = MarkdownBubble(
+                text,
+                background=_coerce_str(colors["user_bubble"]),
+                border=_coerce_str(colors["user_bubble"]),
+                text_color=_coerce_str(colors["user_bubble_text"]),
+                max_width=520,
+            )
             self.message_widget.setSizePolicy(
                 QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum
             )
-            self.message_widget.setMaximumWidth(480)
             layout.addStretch()
-            _user_bg = "#262626" if colors["is_dark"] else "#e8e8e8"
-            _user_fg = colors["text"] if colors["is_dark"] else "#1a1a1a"
-            self.message_widget.setStyleSheet(f"""
-                QLabel {{
-                    background-color: {_user_bg};
-                    color: {_user_fg};
-                    border-radius: {colors["radius_lg"]}px;
-                    padding: 10px 14px;
-                    font-weight: 400;
-                }}
-            """)
             layout.addWidget(self.message_widget)
         else:
             # Status indicator for assistant messages (small dot)
-            self._status_indicator = QLabel("●")
-            self._status_indicator.setFixedWidth(16)
-            self._status_indicator.setAlignment(
+            status_indicator = QLabel("●")
+            self._status_indicator = status_indicator
+            status_indicator.setFixedWidth(16)
+            status_indicator.setAlignment(
                 Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignTop
             )
             self._update_indicator_style()
-            layout.addWidget(self._status_indicator)
+            layout.addWidget(status_indicator)
 
             # Apply type-specific styling
             if self._msg_type == MessageType.TOOL_USE:
@@ -1618,36 +1717,19 @@ class ChatMessage(QFrame):
             elif self._msg_type == MessageType.OUTPUT:
                 self.message_widget = CodeBlock("Output", text, tone="output")
             elif self._msg_type == MessageType.ERROR:
-                self.message_widget = QLabel()
-                self.message_widget.setTextFormat(Qt.TextFormat.RichText)
-                self.message_widget.setWordWrap(True)
-                self.message_widget.setOpenExternalLinks(True)
-                self.message_widget.setTextInteractionFlags(TEXT_SELECTABLE_LINK_FLAGS)
-                self.message_widget.setText(markdown_to_html(text))
-                self.message_widget.setStyleSheet(f"""
-                    QLabel {{
-                        background-color: {colors["danger_soft"]};
-                        color: {colors["danger_text"]};
-                        border-left: 3px solid {colors["danger_border"]};
-                        border-radius: 0;
-                        padding: 8px 12px;
-                    }}
-                """)
+                self.message_widget = MarkdownBubble(
+                    text,
+                    background=_coerce_str(colors["danger_soft"]),
+                    border=_coerce_str(colors["danger_border"]),
+                    text_color=_coerce_str(colors["danger_text"]),
+                )
             else:
-                self.message_widget = QLabel()
-                self.message_widget.setTextFormat(Qt.TextFormat.RichText)
-                self.message_widget.setWordWrap(True)
-                self.message_widget.setOpenExternalLinks(True)
-                self.message_widget.setTextInteractionFlags(TEXT_SELECTABLE_LINK_FLAGS)
-                self.message_widget.setText(markdown_to_html(text))
-                self.message_widget.setStyleSheet(f"""
-                    QLabel {{
-                        background-color: transparent;
-                        color: {colors["text"]};
-                        padding: 2px 0;
-                        line-height: 1.6;
-                    }}
-                """)
+                self.message_widget = MarkdownBubble(
+                    text,
+                    background=_coerce_str(colors["surface"]),
+                    border=_coerce_str(colors["border"]),
+                    text_color=_coerce_str(colors["text"]),
+                )
 
             self.message_widget.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
@@ -1677,9 +1759,10 @@ class ChatMessage(QFrame):
         """Start the blinking animation."""
         if self._blink_timer:
             return
-        self._blink_timer = QTimer(self)
-        self._blink_timer.timeout.connect(self._toggle_blink)
-        self._blink_timer.start(500)  # Blink every 500ms
+        blink_timer = QTimer(self)
+        self._blink_timer = blink_timer
+        blink_timer.timeout.connect(self._toggle_blink)
+        blink_timer.start(500)  # Blink every 500ms
 
     def _stop_blinking(self):
         """Stop the blinking animation."""
@@ -1701,16 +1784,23 @@ class ChatMessage(QFrame):
 
     def update_text(self, text: str):
         """Update the message text."""
-        if self.is_user and isinstance(self.message_widget, QLabel):
+        self._raw_text = text
+        if isinstance(self.message_widget, MarkdownBubble):
+            self.message_widget.set_markdown(text)
+        elif self.is_user and isinstance(self.message_widget, QLabel):
             self.message_widget.setText(text)
         elif isinstance(self.message_widget, QLabel):
             self.message_widget.setText(markdown_to_html(text))
 
     def append_text(self, text: str):
         """Append text to this message (TEXT type only)."""
-        if not self.is_user and self._msg_type == MessageType.TEXT and isinstance(self.message_widget, QLabel):
-            self._raw_text = self._raw_text + "\n\n" + text
-            self.message_widget.setText(markdown_to_html(self._raw_text))
+        if (
+            not self.is_user
+            and self._msg_type == MessageType.TEXT
+            and isinstance(self.message_widget, MarkdownBubble)
+        ):
+            self._raw_text = merge_markdown_fragments(self._raw_text, text)
+            self.message_widget.set_markdown(self._raw_text)
 
 
 class ChatHistoryWidget(QScrollArea):
@@ -3530,29 +3620,30 @@ class IDAChatForm(ida_kernwin.PluginForm):
             self.history = MessageHistory(self.db.path)
             if resume_session_id:
                 self.history.switch_session(resume_session_id)
-            self.worker = AgentWorker(
+            worker = AgentWorker(
                 self.db,
                 script_executor,
                 self.history,
                 model_profile=get_model_profile(),
             )
-            self.worker.signals.connection_ready.connect(self._on_connection_ready)
-            self.worker.signals.connection_error.connect(self._on_connection_error)
-            self.worker.signals.turn_start.connect(self._on_turn_start)
-            self.worker.signals.thinking.connect(self._on_thinking)
-            self.worker.signals.thinking_done.connect(self._on_thinking_done)
-            self.worker.signals.tool_use.connect(self._on_tool_use)
-            self.worker.signals.text.connect(self._on_text)
-            self.worker.signals.script_review.connect(self._on_script_review)
-            self.worker.signals.script_output.connect(self._on_script_output)
-            self.worker.signals.error.connect(self._on_error)
-            self.worker.signals.result.connect(self._on_result)
-            self.worker.signals.finished.connect(self._on_finished)
-            self.worker.signals.session_list_updated.connect(
+            self.worker = worker
+            worker.signals.connection_ready.connect(self._on_connection_ready)
+            worker.signals.connection_error.connect(self._on_connection_error)
+            worker.signals.turn_start.connect(self._on_turn_start)
+            worker.signals.thinking.connect(self._on_thinking)
+            worker.signals.thinking_done.connect(self._on_thinking_done)
+            worker.signals.tool_use.connect(self._on_tool_use)
+            worker.signals.text.connect(self._on_text)
+            worker.signals.script_review.connect(self._on_script_review)
+            worker.signals.script_output.connect(self._on_script_output)
+            worker.signals.error.connect(self._on_error)
+            worker.signals.result.connect(self._on_result)
+            worker.signals.finished.connect(self._on_finished)
+            worker.signals.session_list_updated.connect(
                 self._on_session_list_updated
             )
-            self.worker.signals.session_loaded.connect(self._on_session_loaded)
-            self.worker.request_connect()
+            worker.signals.session_loaded.connect(self._on_session_loaded)
+            worker.request_connect()
         except Exception as error:
             self._connection_ready = False
             self._set_state_chip("Connection failed", "error")
