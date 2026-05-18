@@ -44,6 +44,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QThread, QObject, QTimer, QSize
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QKeyEvent, QPalette, QPixmap
+try:
+    from shiboken6 import isValid as _shiboken_is_valid
+except Exception:
+    _shiboken_is_valid = None
 
 from ida_chat_core import (
     IDAChatCore,
@@ -137,6 +141,20 @@ _UNSET = cast(object, None)
 DEFAULT_MODEL_PROFILE = "sonnet"
 _INITIAL_ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 _INITIAL_CLAUDE_CODE_OAUTH_TOKEN = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+
+
+def _is_qt_object_valid(obj: Any) -> bool:
+    """Return False once PySide's underlying C++ object has been destroyed."""
+    if obj is None:
+        return False
+    if _shiboken_is_valid is None:
+        return True
+    try:
+        return bool(_shiboken_is_valid(obj))
+    except RuntimeError:
+        return False
+    except Exception:
+        return True
 
 
 def text_interaction_flags(
@@ -929,12 +947,16 @@ class AutoSizingTextBrowser(QTextBrowser):
         )
 
     def set_max_content_width(self, width: int | None) -> None:
+        if not self._is_valid():
+            return
         self._max_content_width = width
         self._measure_preferred_width()
         self._sync_height()
 
     def set_html_fragment(self, html_text: str) -> None:
         """Replace the current rich text content and recompute height."""
+        if not self._is_valid():
+            return
         self.setHtml(html_text)
         self._measure_preferred_width()
         self._sync_height()
@@ -952,7 +974,18 @@ class AutoSizingTextBrowser(QTextBrowser):
     showEvent = _handle_show_event
 
     def _sync_height(self) -> None:
-        viewport_width = max(self.viewport().width(), 0)
+        if not self._is_valid():
+            return
+        document = self._document_if_valid()
+        if document is None:
+            return
+        try:
+            viewport = self.viewport()
+        except RuntimeError:
+            return
+        if not _is_qt_object_valid(viewport):
+            return
+        viewport_width = max(viewport.width(), 0)
         target_width = viewport_width or self._preferred_width
         if self._max_content_width is not None and self._max_content_width > 0:
             target_width = (
@@ -961,9 +994,9 @@ class AutoSizingTextBrowser(QTextBrowser):
                 else self._max_content_width
             )
         if target_width > 0:
-            self.document().setTextWidth(target_width)
-        self.document().adjustSize()
-        height = int(self.document().size().height()) + 6
+            document.setTextWidth(target_width)
+        document.adjustSize()
+        height = int(document.size().height()) + 6
         if height > 0:
             self._preferred_height = height
             self.setMinimumHeight(height)
@@ -971,12 +1004,27 @@ class AutoSizingTextBrowser(QTextBrowser):
         self.updateGeometry()
 
     def _measure_preferred_width(self) -> None:
-        self.document().setTextWidth(-1)
-        self.document().adjustSize()
-        ideal_width = int(self.document().idealWidth()) + 4
+        document = self._document_if_valid()
+        if document is None:
+            return
+        document.setTextWidth(-1)
+        document.adjustSize()
+        ideal_width = int(document.idealWidth()) + 4
         if self._max_content_width is not None and self._max_content_width > 0:
             ideal_width = min(ideal_width, self._max_content_width)
         self._preferred_width = max(ideal_width, 72)
+
+    def _is_valid(self) -> bool:
+        return _is_qt_object_valid(self)
+
+    def _document_if_valid(self):
+        if not self._is_valid():
+            return None
+        try:
+            document = self.document()
+        except RuntimeError:
+            return None
+        return document if _is_qt_object_valid(document) else None
 
     def sizeHint(self):
         hint = super().sizeHint()
