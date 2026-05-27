@@ -1,8 +1,0 @@
-claude-agent-sdk
-ida-domain
-ida-settings>=3.3.0
-beautifulsoup4>=4.12.3
-linkify-it-py>=2.0.3
-markdown-it-py>=3.0.0
-Pygments>=2.18.0
-rich
